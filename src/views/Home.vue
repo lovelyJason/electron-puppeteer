@@ -1,12 +1,31 @@
 <template>
-  <div class="home">
+  <div class="home clearfix">
     <!-- <HelloWorld msg="Welcome to Your Vue.js App"/> -->
     <div class="left">
+      <div class="account">
+        <span>选择账号</span>
+        <el-form ref="form">
+          <el-form-item>
+
+            <el-col :span="11">
+              <el-input v-model="username" placeholder="账号"></el-input>
+            </el-col>
+            <el-col class="line" :span="2">-</el-col>
+            <el-col :span="11">
+              <el-input v-model="password" placeholder="密码"></el-input>
+            </el-col>
+          </el-form-item>
+        </el-form>
+      </div>
       <div class="btns-wrapper">
-        <el-button type="primary" @click="startPuppeteer">一键启动</el-button>
+        <el-button type="primary" @click="startPuppeteer" v-loading="loadBrowser">{{ startText }}</el-button>
         <el-button type="success" @click="debug">debug</el-button>
         <el-button type="danger">停止</el-button>
         <el-button type="warning" @click="dialog">导入excel</el-button>
+      </div>
+      <div class="remind">
+        注意事项: <br />
+        一键启动后会自动帮你输入账号密码,但是图形验证码要你自己手动点,然后再回来点第一个按钮
       </div>
     </div>
     <div class="right">
@@ -33,7 +52,8 @@
       >
         <u-table-column label="流水号" prop="number"> </u-table-column>
         <u-table-column label="申请日期" prop="applyDate"> </u-table-column>
-        <u-table-column prop="applicationNum" label="申请号" width="150"> </u-table-column>
+        <u-table-column prop="applicationNum" label="申请号" width="150">
+        </u-table-column>
         <u-table-column prop="3" label="发明名称"> </u-table-column>
         <u-table-column prop="4" label="申请人"> </u-table-column>
         <u-table-column prop="5" label="费用"> </u-table-column>
@@ -73,7 +93,6 @@ export default {
       rowHeight: 50,
       patentData: [],
       columns: Array.from({ length: 10 }, (_, idx) => {
-        console.log(_)
         return {
           prop: 'address',
           id: idx,
@@ -81,15 +100,51 @@ export default {
           width: 200,
           showOverflow: true
         }
-      })
+      }),
+      username: '13775637795',
+      password: '1988909db，',
+      openBowser: false,
+      loadBrowser: false,
+      startText: '一键启动'
     }
   },
   methods: {
+    testEmpty (str) {
+      if (str && str.trim()) return false
+      return true
+    },
     startPuppeteer () {
+      if (this.testEmpty(this.username) || this.testEmpty(this.password)) {
+        this.$message({
+          type: 'error',
+          message: '请先输入账号和密码'
+        })
+        return
+      }
+      if (this.openBowser) {
+        this.resume()
+        return
+      }
+      this.openBowser = true
+      this.loadBrowser = true
+      console.log('start up')
       ipcRenderer.send('start')
+      setTimeout(() => {
+        this.loadBrowser = false
+        this.startText = '点我继续启动'
+      }, 500)
+    },
+    resume () {
+      const selectyzm = document.getElementById('selectyzm_text')
+      console.log(selectyzm)
     },
     debug () {
-      ipcRenderer.send('debug')
+      // ipcRenderer.send('debug')
+      const remote = require('electron').remote
+      const myRequire = remote.require
+      const myPuppeteerPath = myRequire('path').resolve(remote.process.cwd(), './src/puppeteer')
+      myRequire(myPuppeteerPath).getLoginVerify()
+      // myRequire('./puppeteer')
     },
     dialog () {
       ipcRenderer.send('dialog')
@@ -126,10 +181,20 @@ export default {
   .left {
     width: 289px;
     float: left;
+    .account {
+      width: 90%;
+      border: 1px solid #ebeef5;
+      margin: 0 auto 12px;
+      padding: 6px 8px 0;
+      input {
+        height: 30px;
+      }
+    }
     .btns-wrapper {
       display: flex;
       flex-direction: column;
       align-items: center;
+      margin-top: 36px;
       .el-button {
         width: 200px;
         margin-bottom: 8px;
@@ -137,6 +202,12 @@ export default {
           margin-left: 10px;
         }
       }
+    }
+    .remind {
+      width: 200px;
+      margin: 6px auto 0;
+      text-align: left;
+      font-size: 14px;
     }
   }
   .right {

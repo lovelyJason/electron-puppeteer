@@ -1,2 +1,3 @@
 src/background.js
 src/puppeteer/*.js
+src/lib/*.js

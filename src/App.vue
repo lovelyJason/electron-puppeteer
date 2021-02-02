@@ -1,7 +1,7 @@
 <template>
   <div id="app">
     <div id="nav">
-      <router-link to="/">豆豆启动神器</router-link>
+      <span>豆豆启动神器</span>
       <!-- | -->
       <!-- <router-link to="/about">About</router-link> -->
     </div>
@@ -19,7 +19,7 @@
 }
 
 #nav {
-  padding: 30px;
+  padding: 10px;
 
   a {
     font-weight: bold;
@@ -28,6 +28,10 @@
     &.router-link-exact-active {
       color: #42b983;
     }
+  }
+  span {
+    font-weight: bold;
+    color: #42b983;
   }
 }
 </style>

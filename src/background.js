@@ -3,11 +3,15 @@
 import { app, protocol, BrowserWindow, ipcMain, dialog } from 'electron'
 import { createProtocol } from 'vue-cli-plugin-electron-builder/lib'
 import installExtension, { VUEJS_DEVTOOLS } from 'electron-devtools-installer'
-import { start, login } from './puppeteer'
-const isDevelopment = process.env.NODE_ENV !== 'production'
+import { start, login } from './puppeteer/index.js'
 
+const isDevelopment = process.env.NODE_ENV !== 'production'
 const fs = require('fs')
 const { parseExcel } = require('./utils')
+
+// 渲染进程调用会报错Cannot find module './puppeteer' Require stack:
+var myPuppeteer = require('./puppeteer')
+console.log(myPuppeteer)
 
 // Scheme must be registered before the app is ready
 protocol.registerSchemesAsPrivileged([
@@ -16,7 +20,7 @@ protocol.registerSchemesAsPrivileged([
 async function createWindow () {
   // Create the browser window.
   const win = new BrowserWindow({
-    width: 800,
+    width: 820,
     height: 600,
     webPreferences: {
       // Use pluginOptions.nodeIntegration, leave this alone
@@ -37,9 +41,10 @@ async function createWindow () {
 
   let browser, page
   ipcMain.on('start', async (event, ans) => {
-    const res = await start()
+    const res = await start() || {}
     browser = res.browser
     page = res.page
+    process.env.mypage = page
     // 发送渲染进程
     event.reply('startSuccess', '来自主进程')
   })
