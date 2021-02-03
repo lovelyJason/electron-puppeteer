@@ -5,6 +5,7 @@ import { createProtocol } from 'vue-cli-plugin-electron-builder/lib'
 import installExtension, { VUEJS_DEVTOOLS } from 'electron-devtools-installer'
 import { login } from './puppeteer/index.js'
 import { getRecognition } from './lib/lianzhong.js'
+import axios from 'axios'
 
 // require('@electron/remote/main').initialize()      // electron 10.0以下版本不兼容
 const fs = require('fs')
@@ -16,22 +17,28 @@ const http = require('http');
 const isDevelopment = process.env.NODE_ENV !== 'production'
 let win, browser, page
 
+// 图片有防盗,直接请求不了,需要传入cookie,且浏览器如果刷新了这个图片,cookie也会更新
 function getImgBase64Data (url) {
-  return new Promise((resolve, reject) => {
-    http.get(url, function (res) {
-        var chunks = [];
-        var size = 0;
-        res.on('data', function (chunk) {
-            chunks.push(chunk);
-            size += chunk.length;　　//累加缓冲数据的长度
-        });
-        res.on('end', function (err) {
-            var data = Buffer.concat(chunks, size);
-            var base64Img = data.toString('base64');
-            resolve(`data:image/jpeg;base64,${base64Img}`)
-            // console.log(`data:image/png;base64,${base64Img}`);
-        });
-    });
+  // return new Promise((resolve, reject) => {
+  //   http.get(url, function (res) {
+  //       var chunks = [];
+  //       var size = 0;
+  //       res.on('data', function (chunk) {
+  //           chunks.push(chunk);
+  //           size += chunk.length;　　//累加缓冲数据的长度
+  //       });
+  //       res.on('end', function (err) {
+  //           var data = Buffer.concat(chunks, size);
+  //           var base64Img = data.toString('base64');
+  //           resolve(`data:image/jpeg;base64,${base64Img}`)
+  //           // console.log(`data:image/png;base64,${base64Img}`);
+  //       });
+  //   });
+  // })
+  return axios.get(url).then(res => {
+    console.log(res)
+  }).catch(error => {
+    throw error
   })
 }
 
@@ -60,13 +67,14 @@ async function startPuppeteer() {
       },
       ignoreDefaultArgs: ["--enable-automation"],
       executablePath:
-        // '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-        process.env.NODE_ENV === 'development'
-        ? path.resolve(
-          process.cwd(),
-          "./node_modules/puppeteer/.local-chromium/win64-818858/chrome-win/chrome.exe"
-        ) :
-        getChromiumExecPath(),
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+        // process.env.NODE_ENV === 'development'
+        // ? path.resolve(
+        //   process.cwd(),
+        //   "./node_modules/puppeteer/.local-chromium/win64-818858/chrome-win/chrome.exe"
+        // ) :
+        // getChromiumExecPath(),
+        ,
       args: [
         "--disable-blink-features=AutomationControlled",
         "--allow-running-insecure-content",
@@ -175,7 +183,7 @@ async function startPuppeteer() {
 }
 
 async function verifyCode () {
-  const url = 'http://cpquery.sipo.gov.cn/freeze.main?txn-code=createImgServlet&freshStept=1&now=Wed%20Feb%2003%202021%2017:42:50%20GMT+0800%20(%E4%B8%AD%E5%9B%BD%E6%A0%87%E5%87%86%E6%97%B6%E9%97%B4)'
+  const url = 'http://cpquery.sipo.gov.cn/freeze.main?txn-code=createImgServlet&freshStept=1'
   let base64data = await getImgBase64Data(url)
   return base64data
 }
@@ -186,15 +194,29 @@ async function searchPatent (applyNum) {
     page.waitForSelector('tr td:first-child').then(async () => {
       await page.type('tr td:nth-child(2) input', applyNum, { delay: 100 })
       // 输入验证码
-      let base64data = await verifyCode()
+      let base64data
+      // let base64data = await verifyCode()    // 请求不到
+
+      // #authImg截屏
+      let authImg = await page.$('#authImg')
+      await authImg.screenshot({
+        path: 'code.jpeg',
+        omitBackground: true
+      })
+
+      // fs.writeFile('./base64.txt', base64data, 'utf-8', (err, data) => {
+      //   if(err) {
+      //     console.log(err.message)
+      //   }
+      // })
       const recognition = await getRecognition(base64data)
-      console.log(recognition)
+      console.log('识别结果', recognition)
       // 开始查询
       // const button = await page.$('tr:last-child td:last-child a')
       // await button.click()
     })
   } catch (error) {
-    console.log(error)
+    console.log(error.message)
   }
 }
 
@@ -298,3 +320,7 @@ if (isDevelopment) {
     })
   }
 }
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.log('Unhandled Rejection:', reason)
+})

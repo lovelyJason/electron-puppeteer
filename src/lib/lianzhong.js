@@ -5,6 +5,7 @@ const username = 'sanshao520', password = 'hzj9154976@'
 
 // 图片路径
 // http://cpquery.sipo.gov.cn/freeze.main?txn-code=createImgServlet&freshStept=1&now=Wed%20Feb%2003%202021%2017:42:50%20GMT+0800%20(%E4%B8%AD%E5%9B%BD%E6%A0%87%E5%87%86%E6%97%B6%E9%97%B4)
+// http://cpquery.sipo.gov.cn/freeze.main?txn-code=createImgServlet&freshStept=1
 
 /**
  * 上传信息同时获取结果
@@ -26,6 +27,7 @@ export function getRecognition(captchaData, captchaType=1201) {
   }
   return api.post('https://v2-api.jsdama.com/upload', params).then(res => {
     const { data: { recognition } } = res
+    console.log('打码结果', res)
     return recognition
   }).catch(error => {
     throw error

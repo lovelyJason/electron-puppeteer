@@ -23,7 +23,7 @@ api.interceptors.response.use(
   (response) => {
     if (typeof status !== 'number' || (status !== 0)) {
       const newData = {
-        message: '系统异常',
+        message: response.data && response.data.message,
         status: -1,
       }
       return Promise.reject(newData);
