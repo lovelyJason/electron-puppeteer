@@ -2,7 +2,9 @@ module.exports = {
   pluginOptions: {
     electronBuilder: {
       // preload: 'src/preload.js',
-      nodeIntegration: true
+      nodeIntegration: true,
+      asar: true,
+      asarUnpack: 'node_modules/puppeteer/.local-chromium/**/*'
     }
   }
 }

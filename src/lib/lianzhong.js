@@ -1,6 +1,10 @@
 import api from './api'
 
-const softwareId = 4736, softwareSecret
+const softwareId = 4736, softwareSecret = '0nyn89M6un61Np48i8485UIUu0h6n8HjH868T4HT'
+const username = 'sanshao520', password = 'hzj9154976@'
+
+// 图片路径
+// http://cpquery.sipo.gov.cn/freeze.main?txn-code=createImgServlet&freshStept=1&now=Wed%20Feb%2003%202021%2017:42:50%20GMT+0800%20(%E4%B8%AD%E5%9B%BD%E6%A0%87%E5%87%86%E6%97%B6%E9%97%B4)
 
 /**
  * 上传信息同时获取结果
@@ -11,16 +15,16 @@ const softwareId = 4736, softwareSecret
  */
 
 
-export function getRecognition(username, password, captchaData, captchaType) {
+export function getRecognition(captchaData, captchaType=1201) {
   let params = {
     softwareId,
     softwareSecret,
     username,
     password,
     captchaData,
-    captchaType
+    captchaType: 1201
   }
-  api.post('https://v2-api.jsdama.com/upload', params).then(res => {
+  return api.post('https://v2-api.jsdama.com/upload', params).then(res => {
     const { data: { recognition } } = res
     return recognition
   }).catch(error => {
@@ -47,3 +51,4 @@ export function checkpoints(_username, _password) {
 }
 
 // base64
+

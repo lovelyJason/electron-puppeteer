@@ -1,7 +1,9 @@
-const puppeteer = require("puppeteer");
 const path = require("path");
 const os = require("os");
+const fs =require('fs');
+const { setTimeout } = require("timers");
 
+// 这里无法热更新的问题
 function checkOperatingSystem(type) {
   switch (type) {
     case "Windows_NT":
@@ -17,10 +19,15 @@ function checkOperatingSystem(type) {
 
 const osType = checkOperatingSystem(os.type())
 
-async function login(page) {
-  page = page || process.env.mypage
-  await page.type("#username1", "13685231955", { delay: 100 });
-  await page.type("#password1", "Ky131328!", { delay: 100 });
+function login(page) {
+  page.waitForSelector('#username1').then(async () => {
+    await page.evaluate(() => {
+      document.getElementById('username1').value = ''
+      document.getElementById('password1').value = ''
+    })
+    await page.type("#username1", "13685231955", { delay: 100 });
+    await page.type("#password1", "Ky131328!", { delay: 100 });
+  })
 }
 
 console.log(process.env.NODE_ENV)
@@ -188,14 +195,19 @@ async function start() {
 
 // 登陆验证码校验
 
-function getLoginVerify(page) {
-  console.log('开始登陆校验')
-  page = page || process.env.mypage
-  return page.$('#selectyzm_text').innerText.includes('验证成功')
+async function getLoginVerify() {
+  try {
+    const text = await global.page.$eval('#selectyzm_text', node => node.innerText)
+    console.log(text)
+    return {
+      flag: text.includes('验证成功'),
+      text: text
+    }
+  } catch (error) {
+  }
 }
 
 module.exports = {
-  start,
   login,
   getLoginVerify
 };

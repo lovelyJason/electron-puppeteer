@@ -12,7 +12,7 @@ function parseExcel (path) {
         rows.push({
           number: row[0],
           applyDate: row[1],
-          applicationNum: row[2]
+          applyNum: row[2]
         })
       }
     }

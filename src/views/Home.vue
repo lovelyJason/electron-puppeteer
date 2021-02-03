@@ -19,9 +19,9 @@
       </div>
       <div class="btns-wrapper">
         <el-button type="primary" @click="startPuppeteer" v-loading="loadBrowser">{{ startText }}</el-button>
-        <el-button type="success" @click="debug">debug</el-button>
+        <el-button v-if="idDev" type="success" @click="debug">debug</el-button>
         <el-button type="danger">停止</el-button>
-        <el-button type="warning" @click="dialog">导入excel</el-button>
+        <el-button type="warning" @click="openDialog">导入excel</el-button>
       </div>
       <div class="remind">
         注意事项: <br />
@@ -34,7 +34,7 @@
         </el-table-column>
         <el-table-column prop="1" label="申请日期">
         </el-table-column>
-        <el-table-column prop="applicationNum" label="申请号"> </el-table-column>
+        <el-table-column prop="applyNum" label="申请号"> </el-table-column>
         <el-table-column prop="3" label="发明名称"> </el-table-column>
         <el-table-column prop="4" label="申请人"> </el-table-column>
         <el-table-column prop="5" label="费用"> </el-table-column>
@@ -49,10 +49,11 @@
         showHeaderOverflow="title"
         :row-height="rowHeight"
         border
+        @row-click="onRowClick"
       >
         <u-table-column label="流水号" prop="number"> </u-table-column>
         <u-table-column label="申请日期" prop="applyDate"> </u-table-column>
-        <u-table-column prop="applicationNum" label="申请号" width="150">
+        <u-table-column prop="applyNum" label="申请号" width="150">
         </u-table-column>
         <u-table-column prop="3" label="发明名称"> </u-table-column>
         <u-table-column prop="4" label="申请人"> </u-table-column>
@@ -76,6 +77,10 @@
           :width="item.width"
         /> -->
       </u-table>
+      <div class="operate-log">
+        <div class="header">操作日志</div>
+        <div class="content" id="logContent"></div>
+      </div>
     </div>
   </div>
 </template>
@@ -105,7 +110,16 @@ export default {
       password: '1988909db，',
       openBowser: false,
       loadBrowser: false,
-      startText: '一键启动'
+      startText: '一键启动',
+      hasData: false,
+      count: 0,
+      tableData: [],
+      dataLength: 0
+    }
+  },
+  computed: {
+    idDev () {
+      return process.env.NODE_ENV === 'development'
     }
   },
   methods: {
@@ -132,21 +146,62 @@ export default {
       setTimeout(() => {
         this.loadBrowser = false
         this.startText = '点我继续启动'
-      }, 500)
+      }, 3000)
+    },
+    renderOperateLog () {
+      const count = this.count
+      const logContent = document.getElementById('logContent')
+      const text = logContent.innerText
+      logContent.innerText = text + `> 正在操作第${count}条数据...\n`
+    },
+    repeatSearch (applyNum) {
+      // 同步,会堵塞渲染进程
+      const done = ipcRenderer.sendSync('search', applyNum)
+      if (done) {
+        this.dataLength--
+        this.tableData.shift()
+        this.setData(this.dataLength, this.tableData)
+      }
     },
     resume () {
-      const selectyzm = document.getElementById('selectyzm_text')
-      console.log(selectyzm)
+      if (!this.hasData) {
+        this.$message({
+          type: 'error',
+          message: '请先导入excel文件,软件帮你全自动处理'
+        })
+      }
+      this.$message({
+        type: 'success',
+        message: '准备好了,努力发射中,请放开你的双手'
+      })
+      this.repeatSearch()
     },
-    debug () {
+    async debug () {
       // ipcRenderer.send('debug')
-      const remote = require('electron').remote
-      const myRequire = remote.require
-      const myPuppeteerPath = myRequire('path').resolve(remote.process.cwd(), './src/puppeteer')
-      myRequire(myPuppeteerPath).getLoginVerify()
-      // myRequire('./puppeteer')
+      // const remote = require('electron').remote
+      // const myRequire = remote.require
+      // // 打包成exe后，不管是绝对路径还是相对路径， win-unpacked\resources\app.asar\background.js中均会提示模块不存在，应该是asar原因
+      // const myPuppeteerPath = myRequire('path').resolve(remote.process.cwd(), './src/puppeteer')
+      // const { text, flag } = await myRequire(myPuppeteerPath).getLoginVerify()
+      // console.log(flag)
+      // if (!flag) {
+      //   this.$message({
+      //     type: 'error',
+      //     message: `${text}`
+      //   })
+      // }
+
+      if (!this.tableData.length) {
+        this.$message({
+          type: 'error',
+          message: '请先上传excel'
+        })
+        return
+      }
+      const applyNum = this.tableData[0].applyNum
+      this.repeatSearch(applyNum)
     },
-    dialog () {
+    openDialog () {
       ipcRenderer.send('dialog')
     },
     setData (num, ans) {
@@ -154,12 +209,15 @@ export default {
       const data = Array.from({ length: num }, (_, idx) => {
         return {
           id: idx + 1,
-          applicationNum: ans[idx].applicationNum,
+          applyNum: ans[idx].applyNum,
           number: ans[idx].number,
           applyDate: ans[idx].applyDate
         }
       })
       that.$refs.plTable.reloadData(data)
+    },
+    onRowClick (row) {
+      console.log(row)
     }
   },
   mounted () {
@@ -170,7 +228,13 @@ export default {
       // console.log(ans)
       // this.patentData = ans;
       const length = ans.length
+      this.hasData = true
+      this.dataLength = length
+      this.tableData = ans
       this.setData(length, ans)
+    })
+    ipcRenderer.on('errorHandle', (event, ans) => {
+      console.log(ans)
     })
   }
 }
@@ -178,8 +242,10 @@ export default {
 
 <style lang="less">
 .home {
+  height: 490px;
   .left {
     width: 289px;
+    height: 100%;
     float: left;
     .account {
       width: 90%;
@@ -213,7 +279,28 @@ export default {
   .right {
     float: left;
     width: 490px;
-    height: 280px;
+    height: 100%;
+    position: relative;
+    tbody {
+      tr {
+        &:first-child {
+          background-color: #f0f9eb;
+        }
+      }
+    }
+    .operate-log {
+      position: absolute;
+      width: 490px;
+      min-height: 160px;
+      margin-top: 20px;
+      border: 1px solid #ebeef5;
+      text-align: left;
+      font-size: 14px;
+      .header {
+        padding: 8px;
+        border-bottom: 1px dashed#ebeef5;
+      }
+    }
   }
 }
 </style>

@@ -21,10 +21,9 @@ const api = axios.create({
 
 api.interceptors.response.use(
   (response) => {
-    const status = typeof response.data.status !== 'undefined' ? response.data.status : UNEXPETED_STATUS;
     if (typeof status !== 'number' || (status !== 0)) {
       const newData = {
-        msg: '系统异常',
+        message: '系统异常',
         status: -1,
       }
       return Promise.reject(newData);
@@ -33,7 +32,7 @@ api.interceptors.response.use(
   },
   () => {
     return Promise.reject({
-      msg: '网络异常',
+      message: '网络异常',
       status: -1,
     });
   }
