@@ -6,7 +6,6 @@ import installExtension, { VUEJS_DEVTOOLS } from 'electron-devtools-installer'
 import { login, getLoginVerify } from './puppeteer/index.js'
 import { getRecognition } from './lib/lianzhong.js'
 import { insertDataFromExcel } from './utils'
-
 // import axios from 'axios'
 
 // require('@electron/remote/main').initialize()      // electron 10.0以下版本不兼容
@@ -18,7 +17,7 @@ const http = require('http');
 const os = require("os");
 
 const isDevelopment = process.env.NODE_ENV !== 'production'
-let win, browser, page, excelPath, pageJumpCount = 0
+let win, browser, page, excelPath, pageJumpCount = 0, browserPath = ''
 global.startRow = 3
 
 function checkOperatingSystem(type) {
@@ -67,27 +66,71 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'app', privileges: { secure: true, standard: true } }
 ])
 
-function getChromiumExecPath() {
-  if(isDevelopment) {
-    if(osType === "windows") {
-      return path.resolve(
-        process.cwd(),
-        "./node_modules/puppeteer/.local-chromium/win64-818858/chrome-win/chrome.exe"
-      )
+function getChromeDefaultPath () {
+  return new Promise((resolve, reject) => {
+    if(browserPath) {
+      fs.stat(browserPath, (err, stat) => {
+        if(err) {
+          console.log('你的路径下没有chrome')
+          win.webContents.send('errorHandle', { message: '你的路径下没有chrome', code: -100 })
+          reject({
+            ...err,
+            code: -100
+          })
+        } else {
+          resolve(browserPath)
+        }
+
+      })
     } else {
-      return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+      fs.stat('C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', (err1, stat) => {
+        if(err1) {
+          reject(err1)
+        } else {
+          resolve('C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe')
+        }
+      })
     }
-  } else {
-    if(osType === "windows") {
-      return puppeteer.executablePath().replace('app.asar', 'app.asar.unpacked');
-    } else {
+
+  })
+}
+
+function getChromiumExecPath(event) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      let defaultPath = await getChromeDefaultPath()
+      console.log('default chrome path', defaultPath)
+      if(isDevelopment) {
+        if(osType === "windows") {
+          resolve(defaultPath || path.resolve(
+            process.cwd(),
+            "./node_modules/puppeteer/.local-chromium/win64-818858/chrome-win/chrome.exe"
+          ))
+        } else {
+          resolve('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')
+        }
+      } else {
+        if(osType === "windows") {
+          resolve(defaultPath || puppeteer.executablePath().replace('app.asar', 'app.asar.unpacked'));
+        } else {
+        }
+      }
+      event.returnValue = {
+        code: 0,
+        message: 'success'
+      }
+    } catch (error) {
+      event.returnValue = error
+      throw error
     }
-  }
+
+  })
 }
 
 // start puppeteer
-async function startPuppeteer() {
+async function startPuppeteer(event) {
   console.log("start up");
+  let chromeExecPath = await getChromiumExecPath(event)
   try {
     browser = await puppeteer.launch({
       headless: false,
@@ -103,7 +146,7 @@ async function startPuppeteer() {
         //   process.cwd(),
         //   "./node_modules/puppeteer/.local-chromium/win64-818858/chrome-win/chrome.exe"
         // ) :
-        getChromiumExecPath(),
+        chromeExecPath,
       args: [
         "--disable-blink-features=AutomationControlled",
         "--allow-running-insecure-content",
@@ -206,8 +249,7 @@ async function startPuppeteer() {
     login(page)
   } catch (error) {
     console.log(error.message)
-    win.webContents.send('errorHandle', error)
-    throw error;
+    throw error;      // throw error不要同时和webContents.send同时存在,否则重复报错
   }
 }
 
@@ -257,18 +299,17 @@ async function searchPatent (applyNum) {
           page.waitForNavigation({ waitUntil: 'load' }) // 解决高并发导致的报错
         ])
         // 复制查询后的结果
-        page.waitForSelector('.imfor_table_grid tr:nth-child(2) td:nth-child(1) span').then(async () => {
-          let feeData = await copySearchResult()   // ['种类', '600', '2020-01-17', '未缴费']
-          resolve({
-            feeType: feeData[0],
-            payableAmount: +feeData[1],
-            deadline: feeData[2],
-            feeStatus: feeData[3]
-          })
+        await page.waitForSelector('.imfor_table_grid tr:nth-child(2) td:nth-child(1) span')
+        let feeData = await copySearchResult()   // ['种类', '600', '2020-01-17', '未缴费']
+        resolve({
+          feeType: feeData[0],
+          payableAmount: +feeData[1],
+          deadline: feeData[2],
+          feeStatus: feeData[3]
         })
       })
     } catch (error) {
-      console.log(error.message)
+      console.log('搜索出错', error.message)
       reject(error)
     }
   })
@@ -297,12 +338,16 @@ function formataFeeData (data={}) {
 
 // electron 从渲染进程访问主进程除ipc外可以使用remote，从主进程渲染进程使用webContents. executeJavascript 在页面执行脚本，如果是puppeteer,page本身也提供访问页面元素的api
 
+if(!isDevelopment) {
+  // Menu.setApplicationMenu(null)
+}
+
 async function createWindow () {
   // Menu.setApplicationMenu()
   // Create the browser window.
   win = new BrowserWindow({
     width: 820,
-    height: 600,
+    height: 670,
     webPreferences: {
       // Use pluginOptions.nodeIntegration, leave this alone
       // See nklayman.github.io/vue-cli-plugin-electron-builder/guide/security.html#node-integration for more info
@@ -322,7 +367,7 @@ async function createWindow () {
   }
 
   ipcMain.on('start', async (event, ans) => {
-    await startPuppeteer()
+    await startPuppeteer(event)
     page.on('load', (e) => {
       console.log('puppeteer page loaded')
       pageJumpCount++
@@ -334,6 +379,10 @@ async function createWindow () {
     })
     // 发送渲染进程
     event.reply('startSuccess', '来自主进程')
+  })
+  ipcMain.on('setPath', (event, ans) => {
+    console.log('用户修改的path', ans)
+    browserPath = ans
   })
   ipcMain.on('dialog', (event, ans) => {
     const path = dialog.showOpenDialogSync({
@@ -436,5 +485,9 @@ if (isDevelopment) {
 }
 
 process.on('unhandledRejection', (reason, promise) => {
+  const { code } = reason
+  console.log(code)
+  if(code === -100) return
   console.log('Unhandled Rejection:', reason)
+  win.webContents.send('errorHandle', reason)
 })

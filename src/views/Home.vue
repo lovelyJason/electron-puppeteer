@@ -2,6 +2,9 @@
   <div class="home clearfix">
     <!-- <HelloWorld msg="Welcome to Your Vue.js App"/> -->
     <div class="left">
+      <div style="margin-bottom: 8px;">
+        <a href="javascript:void(0)" style="color: #42b983;" @click="jump">选择浏览器路径</a>
+      </div>
       <div class="account">
         <span>选择账号</span>
         <el-form ref="form">
@@ -151,10 +154,13 @@ export default {
         this.resume()
         return
       }
+      const { code } = ipcRenderer.sendSync('start')
+      if (code !== 0) {
+        return
+      }
       this.openBowser = true
       this.loadBrowser = true
       console.log('start up')
-      ipcRenderer.send('start')
       setTimeout(() => {
         this.loadBrowser = false
         this.startText = '点我继续启动'
@@ -259,6 +265,9 @@ export default {
     },
     onStopClick () {
       this.stopApp = true
+    },
+    jump () {
+      this.$router.push('/path')
     }
   },
   mounted () {
@@ -275,7 +284,12 @@ export default {
       this.setData(length, ans)
     })
     ipcRenderer.on('errorHandle', (event, ans) => {
-      console.log(ans)
+      const { message } = ans
+      console.log('全局错误', message)
+      this.$message({
+        type: 'error',
+        message: message
+      })
     })
     ipcRenderer.on('closePage', (event, ans) => {
       console.log('page closed')
