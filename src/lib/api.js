@@ -21,11 +21,13 @@ const api = axios.create({
 
 api.interceptors.response.use(
   (response) => {
-    if (typeof status !== 'number' || (status !== 0)) {
+    const { code } = response.data
+    if (typeof code !== 'number' || (code !== 0)) {
       const newData = {
         message: response.data && response.data.message,
-        status: -1,
+        code: -1,
       }
+      console.log('api出错了', response.data)
       return Promise.reject(newData);
     }
     return response.data || {};
@@ -33,7 +35,7 @@ api.interceptors.response.use(
   () => {
     return Promise.reject({
       message: '网络异常',
-      status: -1,
+      code: -1,
     });
   }
 );

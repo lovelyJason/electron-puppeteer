@@ -6,7 +6,6 @@
         <span>选择账号</span>
         <el-form ref="form">
           <el-form-item>
-
             <el-col :span="11">
               <el-input v-model="username" placeholder="账号"></el-input>
             </el-col>
@@ -18,14 +17,24 @@
         </el-form>
       </div>
       <div class="btns-wrapper">
-        <el-button type="primary" @click="startPuppeteer" v-loading="loadBrowser">{{ startText }}</el-button>
-        <el-button v-if="idDev" type="success" @click="debug">debug</el-button>
-        <el-button type="danger">停止</el-button>
+        <el-button
+          type="primary"
+          @click="startPuppeteer"
+          v-loading="loadBrowser"
+          >{{ startText }}</el-button
+        >
+        <el-button v-if="isDev" type="success" @click="debug">debug</el-button>
+        <el-button type="danger" @click="onStopClick">停止</el-button>
         <el-button type="warning" @click="openDialog">导入excel</el-button>
       </div>
       <div class="remind">
         注意事项: <br />
-        一键启动后会自动帮你输入账号密码,但是图形验证码要你自己手动点,然后再回来点第一个按钮
+        <ul>
+          <li>
+            一键启动后会自动帮你输入账号密码,但是图形验证码要你自己手动点,然后再回来点第一个按钮
+          </li>
+          <li>我将从你的表格第三行开始取数据,并在第九列之后添加查询结果</li>
+        </ul>
       </div>
     </div>
     <div class="right">
@@ -114,11 +123,14 @@ export default {
       hasData: false,
       count: 0,
       tableData: [],
-      dataLength: 0
+      dataLength: 0,
+      ifLoginCheck: false,
+      stopApp: false,
+      pageJumpCount: 0
     }
   },
   computed: {
-    idDev () {
+    isDev () {
       return process.env.NODE_ENV === 'development'
     }
   },
@@ -148,33 +160,58 @@ export default {
         this.startText = '点我继续启动'
       }, 3000)
     },
-    renderOperateLog () {
+    renderOperateLog (currentApplyNum) {
       const count = this.count
       const logContent = document.getElementById('logContent')
       const text = logContent.innerText
-      logContent.innerText = text + `> 正在操作第${count}条数据...\n`
+      logContent.innerText =
+        text +
+        `> 第${count}条数据${currentApplyNum}操作完成,正在保存数据并开始下一条...\n`
     },
     repeatSearch (applyNum) {
       // 同步,会堵塞渲染进程
       const done = ipcRenderer.sendSync('search', applyNum)
       if (done) {
+        // 更新表格数据和操作日志
         this.dataLength--
-        this.tableData.shift()
+        this.count++
+        const currentRow = this.tableData.shift()
+        const currentApplyNum = currentRow && currentRow.applyNum
         this.setData(this.dataLength, this.tableData)
+        this.renderOperateLog(currentApplyNum)
+        if (!this.stopApp) {
+          this.repeatSearch()
+        }
       }
     },
     resume () {
-      if (!this.hasData) {
+      // 检查是登录验证
+      if (!this.ifLoginCheck && this.pageJumpCount <= 0) {
+        const { flag, text } = ipcRenderer.sendSync('loginCheck')
+        if (!flag) { // 已经校验过不要再判断了
+          this.$message({
+            type: 'error',
+            message: `${text}` || '哪里出问题了'
+          })
+          return
+        } else {
+          this.ifLoginCheck = true
+        }
+      }
+      // 检查是否上传文件
+      if (!this.tableData.length) {
         this.$message({
           type: 'error',
-          message: '请先导入excel文件,软件帮你全自动处理'
+          message: '请先上传excel'
         })
+        return
       }
       this.$message({
         type: 'success',
         message: '准备好了,努力发射中,请放开你的双手'
       })
-      this.repeatSearch()
+      const applyNum = this.tableData[0].applyNum
+      this.repeatSearch(applyNum)
     },
     async debug () {
       // ipcRenderer.send('debug')
@@ -214,10 +251,14 @@ export default {
           applyDate: ans[idx].applyDate
         }
       })
+      console.log('refs', this.$refs)
       that.$refs.plTable.reloadData(data)
     },
     onRowClick (row) {
       console.log(row)
+    },
+    onStopClick () {
+      this.stopApp = true
     }
   },
   mounted () {
@@ -235,6 +276,15 @@ export default {
     })
     ipcRenderer.on('errorHandle', (event, ans) => {
       console.log(ans)
+    })
+    ipcRenderer.on('closePage', (event, ans) => {
+      console.log('page closed')
+      this.openBowser = false
+      this.startText = '一键启动'
+    })
+    ipcRenderer.on('pageJump', (event, ans) => {
+      console.log('跳转次数', ans)
+      this.pageJumpCount = ans
     })
   }
 }
@@ -271,7 +321,8 @@ export default {
     }
     .remind {
       width: 200px;
-      margin: 6px auto 0;
+      margin-left: 8px;
+      margin-top: 8px;
       text-align: left;
       font-size: 14px;
     }
@@ -299,6 +350,9 @@ export default {
       .header {
         padding: 8px;
         border-bottom: 1px dashed#ebeef5;
+      }
+      #logContent {
+        padding-top: 6px;
       }
     }
   }

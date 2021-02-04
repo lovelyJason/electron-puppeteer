@@ -3,9 +3,11 @@
 import { app, protocol, BrowserWindow, ipcMain, dialog, Menu } from 'electron'
 import { createProtocol } from 'vue-cli-plugin-electron-builder/lib'
 import installExtension, { VUEJS_DEVTOOLS } from 'electron-devtools-installer'
-import { login } from './puppeteer/index.js'
+import { login, getLoginVerify } from './puppeteer/index.js'
 import { getRecognition } from './lib/lianzhong.js'
-import axios from 'axios'
+import { insertDataFromExcel } from './utils'
+
+// import axios from 'axios'
 
 // require('@electron/remote/main').initialize()      // electron 10.0以下版本不兼容
 const fs = require('fs')
@@ -13,32 +15,46 @@ const path = require('path')
 const puppeteer = require("puppeteer");
 const { parseExcel } = require('./utils')
 const http = require('http');
+const os = require("os");
 
 const isDevelopment = process.env.NODE_ENV !== 'production'
-let win, browser, page
+let win, browser, page, excelPath, pageJumpCount = 0
+global.startRow = 3
+
+function checkOperatingSystem(type) {
+  switch (type) {
+    case "Windows_NT":
+      return "windows";
+    case "Darwin":
+      return "darwin";
+    case "Linux":
+      return linux;
+    default:
+      return "windows";
+  }
+}
+
+const osType = checkOperatingSystem(os.type())
+
+console.log(osType)
 
 // 图片有防盗,直接请求不了,需要传入cookie,且浏览器如果刷新了这个图片,cookie也会更新
 function getImgBase64Data (url) {
-  // return new Promise((resolve, reject) => {
-  //   http.get(url, function (res) {
-  //       var chunks = [];
-  //       var size = 0;
-  //       res.on('data', function (chunk) {
-  //           chunks.push(chunk);
-  //           size += chunk.length;　　//累加缓冲数据的长度
-  //       });
-  //       res.on('end', function (err) {
-  //           var data = Buffer.concat(chunks, size);
-  //           var base64Img = data.toString('base64');
-  //           resolve(`data:image/jpeg;base64,${base64Img}`)
-  //           // console.log(`data:image/png;base64,${base64Img}`);
-  //       });
-  //   });
-  // })
-  return axios.get(url).then(res => {
-    console.log(res)
-  }).catch(error => {
-    throw error
+  return new Promise((resolve, reject) => {
+    http.get(url, function (res) {
+        var chunks = [];
+        var size = 0;
+        res.on('data', function (chunk) {
+            chunks.push(chunk);
+            size += chunk.length;　　//累加缓冲数据的长度
+        });
+        res.on('end', function (err) {
+            var data = Buffer.concat(chunks, size);
+            var base64Img = data.toString('base64');
+            resolve(`data:image/jpeg;base64,${base64Img}`)
+            // console.log(`data:image/png;base64,${base64Img}`);
+        });
+    });
   })
 }
 
@@ -52,7 +68,21 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 function getChromiumExecPath() {
-  return puppeteer.executablePath().replace('app.asar', 'app.asar.unpacked');
+  if(isDevelopment) {
+    if(osType === "windows") {
+      return path.resolve(
+        process.cwd(),
+        "./node_modules/puppeteer/.local-chromium/win64-818858/chrome-win/chrome.exe"
+      )
+    } else {
+      return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+    }
+  } else {
+    if(osType === "windows") {
+      return puppeteer.executablePath().replace('app.asar', 'app.asar.unpacked');
+    } else {
+    }
+  }
 }
 
 // start puppeteer
@@ -67,14 +97,13 @@ async function startPuppeteer() {
       },
       ignoreDefaultArgs: ["--enable-automation"],
       executablePath:
-        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-        // process.env.NODE_ENV === 'development'
+        // '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+        // isDevelopment
         // ? path.resolve(
         //   process.cwd(),
         //   "./node_modules/puppeteer/.local-chromium/win64-818858/chrome-win/chrome.exe"
         // ) :
-        // getChromiumExecPath(),
-        ,
+        getChromiumExecPath(),
       args: [
         "--disable-blink-features=AutomationControlled",
         "--allow-running-insecure-content",
@@ -190,34 +219,80 @@ async function verifyCode () {
 
 async function searchPatent (applyNum) {
   // select-key:shenqingh是一个非法选择器名
-  try {
-    page.waitForSelector('tr td:first-child').then(async () => {
-      await page.type('tr td:nth-child(2) input', applyNum, { delay: 100 })
-      // 输入验证码
-      let base64data
-      // let base64data = await verifyCode()    // 请求不到
+  return new Promise((resolve, reject) => {
+    try {
+      page.waitForSelector('tr td:first-child').then(async () => {
+        await page.type('tr td:nth-child(2) input', applyNum, { delay: 100 })
+        // 输入验证码
+        let base64data
+        // let base64data = await verifyCode()    // 请求不到
+        // 提示加载中
+        await page.type('#very-code', '拼命计算')
 
-      // #authImg截屏
-      let authImg = await page.$('#authImg')
-      await authImg.screenshot({
-        path: 'code.jpeg',
-        omitBackground: true
+        // #authImg截屏
+        let authImg = await page.waitForSelector('#authImg')
+        let imgBuffer = await authImg.screenshot({
+          omitBackground: false
+        })
+        await page.screenshot({       // 网页不知道为啥变小不能恢复了
+          fullPage: true
+        })
+        base64data = imgBuffer.toString('base64')
+        // console.log(base64data)
+
+        const recognition = await getRecognition(base64data)
+        console.log('识别结果', recognition)
+        await page.evaluate(() => {
+          document.getElementById('very-code').value = ''
+        })
+        await page.type('#very-code', recognition, { delay: 1000 })
+        const button = await page.$('tr:last-child td:last-child a')
+        await button.click()
+
+        // 点击费用信息
+        let feeInfo = await page.waitForSelector('.content_boxx > ul > li:nth-child(3) a')
+        // console.log(feeInfo)
+        await Promise.all([
+          feeInfo.click(),
+          page.waitForNavigation({ waitUntil: 'load' }) // 解决高并发导致的报错
+        ])
+        // 复制查询后的结果
+        page.waitForSelector('.imfor_table_grid tr:nth-child(2) td:nth-child(1) span').then(async () => {
+          let feeData = await copySearchResult()   // ['种类', '600', '2020-01-17', '未缴费']
+          resolve({
+            feeType: feeData[0],
+            payableAmount: +feeData[1],
+            deadline: feeData[2],
+            feeStatus: feeData[3]
+          })
+        })
       })
+    } catch (error) {
+      console.log(error.message)
+      reject(error)
+    }
+  })
+}
 
-      // fs.writeFile('./base64.txt', base64data, 'utf-8', (err, data) => {
-      //   if(err) {
-      //     console.log(err.message)
-      //   }
-      // })
-      const recognition = await getRecognition(base64data)
-      console.log('识别结果', recognition)
-      // 开始查询
-      // const button = await page.$('tr:last-child td:last-child a')
-      // await button.click()
-    })
-  } catch (error) {
-    console.log(error.message)
-  }
+function copySearchResult () {
+  return Promise.all([
+    page.$eval('.imfor_table_grid tr:nth-child(2) td:nth-child(1) span', el => el.title),
+    page.$eval('.imfor_table_grid tr:nth-child(2) td:nth-child(2) span', el => el.title),
+    page.$eval('.imfor_table_grid tr:nth-child(2) td:nth-child(3) span', el => el.title),
+    page.$eval('.imfor_table_grid tr:nth-child(2) td:nth-child(4) span', el => el.title)
+  ])
+
+}
+
+function formataFeeData (data={}) {
+  const { feeType, payableAmount, deadline, feeStatus } = data
+  // 第九和第十列,第三行为第一条数据
+  return [
+    { row: global.startRow, cell: 9, data: feeType },
+    { row: global.startRow, cell: 10, data: payableAmount },
+    { row: global.startRow, cell: 11, data: deadline },
+    { row: global.startRow, cell: 12, data: feeStatus },
+  ]
 }
 
 // electron 从渲染进程访问主进程除ipc外可以使用remote，从主进程渲染进程使用webContents. executeJavascript 在页面执行脚本，如果是puppeteer,page本身也提供访问页面元素的api
@@ -248,6 +323,15 @@ async function createWindow () {
 
   ipcMain.on('start', async (event, ans) => {
     await startPuppeteer()
+    page.on('load', (e) => {
+      console.log('puppeteer page loaded')
+      pageJumpCount++
+      win.webContents.send('pageJump', pageJumpCount)
+    })
+    page.on('close', () => {
+      console.log('puppeteer page closed')
+      win.webContents.send('closePage')
+    })
     // 发送渲染进程
     event.reply('startSuccess', '来自主进程')
   })
@@ -266,13 +350,43 @@ async function createWindow () {
     if (path && path.length) {
       // let content = fs.readFileSync(path[0])
       // fs.writeFileSync('./data.xlsx',content, 'utf-8')   打包后这个操作报错,只读文件不能写入
+      excelPath = path[0]
       const patentData = parseExcel(path[0])[0] // 因为excel有多个sheet
       event.reply('dialogSuccess', patentData)
     }
   })
-  ipcMain.on('search', (event, ans) => {
-    searchPatent(ans)
-    event.returnValue = true
+  // 登录验证
+  ipcMain.on('loginCheck', async (event, ans) => {
+    try {
+      const { flag, text } = await getLoginVerify()
+      event.returnValue = { flag, text }
+    } catch (error) {   // 页面跳转时不好判断,因此给true
+      event.returnValue = {
+        flag: true,
+        text: error.message
+      }
+    }
+  })
+  // 查询专利
+  ipcMain.on('search', async (event, ans) => {
+    try {
+      // 如果有返回点击返回
+      // const backToPage = await page.$('#backToPage a')
+      // if(backToPage) {
+      //   await backToPage.click()
+      // }
+      console.log(page.url())
+
+      const data = await searchPatent(ans)
+      console.log('查询后的费用数据', data)
+      // 将查询结果插入新列另存,为防止同时多次写入文件,按顺序执行
+      const newExcelDataArr = formataFeeData(data)
+      await insertDataFromExcel(excelPath, 1, newExcelDataArr)
+      global.startRow++
+      event.returnValue = true
+    } catch (error) {
+      event.returnValue = false
+    }
   })
 }
 

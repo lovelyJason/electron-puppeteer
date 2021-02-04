@@ -27,7 +27,7 @@ export function getRecognition(captchaData, captchaType=1201) {
   }
   return api.post('https://v2-api.jsdama.com/upload', params).then(res => {
     const { data: { recognition } } = res
-    console.log('打码结果', res)
+    // console.log('打码结果', res)
     return recognition
   }).catch(error => {
     throw error
