@@ -85,7 +85,7 @@ function getChromeDefaultPath () {
     } else {
       fs.stat('C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', (err1, stat) => {
         if(err1) {
-          reject(err1)
+          resolve('')     // 不能抛错
         } else {
           resolve('C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe')
         }
