@@ -24,7 +24,12 @@ function parseExcel (path) {
         rows.push({
           number: row[0],
           applyDate: row[1],
-          applyNum: row[2]
+          applyNum: row[2],
+          inventName: row[3],
+          applyPerson: row[4],
+          fee: row[5],
+          month: row[6],
+          year: row[7]
         })
         // 每次上传文件的时候,检查应该从哪一行开始操作,即startRow
         if (row[9] && row[10]) {
@@ -47,12 +52,14 @@ function insertDataFromExcel (path, sheet = 1, cellData = []) {
       var worksheet = workbook.getWorksheet(sheet)
       cellData.forEach(function (val) {
         const { row, cell, data } = val
+        console.log('写入的excel数据--------------', `${row}行`, `${cell}列`, data)
         var editRow = worksheet.getRow(row)
         editRow.getCell(cell).value = data
         editRow.commit()
       })
       resolve()
-      workbook.xlsx.writeFile('new.xlsx')
+      // workbook.xlsx.writeFile('new.xlsx')
+      workbook.xlsx.writeFile(path) // 覆盖原文件
     }).catch(error => {
       reject(error)
     })

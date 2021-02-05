@@ -18,6 +18,7 @@
             </el-col>
           </el-form-item>
         </el-form>
+        <el-button type="success" icon="el-icon-check" circle class="confirm-account"></el-button>
       </div>
       <div class="btns-wrapper">
         <el-button
@@ -63,19 +64,18 @@
         border
         @row-click="onRowClick"
       >
-        <u-table-column label="流水号" prop="number"> </u-table-column>
-        <u-table-column label="申请日期" prop="applyDate"> </u-table-column>
+        <u-table-column prop="number" label="流水号"> </u-table-column>
+        <u-table-column prop="applyDate" label="申请日期"> </u-table-column>
         <u-table-column prop="applyNum" label="申请号" width="150">
         </u-table-column>
-        <u-table-column prop="3" label="发明名称"> </u-table-column>
-        <u-table-column prop="4" label="申请人"> </u-table-column>
-        <u-table-column prop="5" label="费用"> </u-table-column>
-        <u-table-column prop="6" label="月份"> </u-table-column>
-        <u-table-column prop="7" label="年份"> </u-table-column>
+        <u-table-column prop="inventName" label="发明名称"> </u-table-column>
+        <u-table-column prop="applyPerson" label="申请人"> </u-table-column>
+        <u-table-column prop="fee" label="费用"> </u-table-column>
+        <u-table-column prop="month" label="月份"> </u-table-column>
+        <u-table-column prop="year" label="年份"> </u-table-column>
         <u-table-column fixed="right" label="操作" width="150">
-          <template>
-            <el-button type="text" size="small">查看</el-button>
-            <el-button type="text" size="small">编辑</el-button>
+          <template slot-scope="scope">
+            <el-button type="text" size="small" @click="copy(scope.row.applyNum)">复制</el-button>
           </template>
         </u-table-column>
         <!-- <u-table-column
@@ -100,7 +100,7 @@
 <script>
 // @ is an alias to /src
 // import HelloWorld from '@/components/HelloWorld.vue'
-const { ipcRenderer } = require('electron')
+const { ipcRenderer, clipboard } = require('electron')
 
 export default {
   name: 'Home',
@@ -127,9 +127,10 @@ export default {
       count: 0,
       tableData: [],
       dataLength: 0,
-      ifLoginCheck: false,
       stopApp: false,
-      pageJumpCount: 0
+      pageJumpCount: 0,
+      puppeteerPageUrl: '',
+      recordSearchSuccess: false
     }
   },
   computed: {
@@ -138,6 +139,13 @@ export default {
     }
   },
   methods: {
+    copy (text) {
+      clipboard.writeText(text)
+      this.$message({
+        type: 'success',
+        message: '已复制到剪切板'
+      })
+    },
     testEmpty (str) {
       if (str && str.trim()) return false
       return true
@@ -176,32 +184,21 @@ export default {
     },
     repeatSearch (applyNum) {
       // 同步,会堵塞渲染进程
-      const done = ipcRenderer.sendSync('search', applyNum)
-      if (done) {
-        // 更新表格数据和操作日志
-        this.dataLength--
-        this.count++
-        const currentRow = this.tableData.shift()
-        const currentApplyNum = currentRow && currentRow.applyNum
-        this.setData(this.dataLength, this.tableData)
-        this.renderOperateLog(currentApplyNum)
-        if (!this.stopApp) {
-          this.repeatSearch()
-        }
-      }
+      // const done = ipcRenderer.sendSync('search', applyNum)     // 有可能卡住,因为是同步的,会导致按钮点不了
+      this.recordSearchSuccess = false
+      ipcRenderer.send('search', applyNum)
     },
     resume () {
       // 检查是登录验证
-      if (!this.ifLoginCheck && this.pageJumpCount <= 0) {
+      const isLoginPage = this.puppeteerPageUrl === 'http://cpquery.sipo.gov.cn/' || this.puppeteerPageUrl === 'http://cpquery.sipo.gov.cn'
+      if (isLoginPage) {
         const { flag, text } = ipcRenderer.sendSync('loginCheck')
-        if (!flag) { // 已经校验过不要再判断了
+        if (!flag) {
           this.$message({
             type: 'error',
             message: `${text}` || '哪里出问题了'
           })
           return
-        } else {
-          this.ifLoginCheck = true
         }
       }
       // 检查是否上传文件
@@ -220,20 +217,6 @@ export default {
       this.repeatSearch(applyNum)
     },
     async debug () {
-      // ipcRenderer.send('debug')
-      // const remote = require('electron').remote
-      // const myRequire = remote.require
-      // // 打包成exe后，不管是绝对路径还是相对路径， win-unpacked\resources\app.asar\background.js中均会提示模块不存在，应该是asar原因
-      // const myPuppeteerPath = myRequire('path').resolve(remote.process.cwd(), './src/puppeteer')
-      // const { text, flag } = await myRequire(myPuppeteerPath).getLoginVerify()
-      // console.log(flag)
-      // if (!flag) {
-      //   this.$message({
-      //     type: 'error',
-      //     message: `${text}`
-      //   })
-      // }
-
       if (!this.tableData.length) {
         this.$message({
           type: 'error',
@@ -250,38 +233,80 @@ export default {
     setData (num, ans) {
       const that = this
       const data = Array.from({ length: num }, (_, idx) => {
+        const record = ans[idx] || {}
         return {
           id: idx + 1,
-          applyNum: ans[idx].applyNum,
-          number: ans[idx].number,
-          applyDate: ans[idx].applyDate
+          applyNum: record.applyNum,
+          number: record.number,
+          applyDate: record.applyDate,
+          inventName: record.inventName,
+          applyPerson: record.applyPerson,
+          fee: record.fee,
+          month: record.month,
+          year: record.year
         }
       })
-      console.log('refs', this.$refs)
-      that.$refs.plTable.reloadData(data)
+      // 大坑,此处ref没获取到,dom未加载完,还有个大坑,ipcRender要在页面注销前卸载监听
+      that.$nextTick(() => {
+        that.$refs.plTable.reloadData(data)
+      })
     },
     onRowClick (row) {
       console.log(row)
     },
     onStopClick () {
       this.stopApp = true
+      this.$message({
+        type: 'success',
+        message: '好的, 已经为您停止,请等待当前操作处理完'
+      })
+      // ipcRenderer.send('stop-search')
     },
     jump () {
       this.$router.push('/path')
     }
   },
   mounted () {
+    console.log('home mounted')
     ipcRenderer.on('startSuccess', (event, ans) => {
       console.log(ans)
     })
-    ipcRenderer.on('dialogSuccess', (event, ans) => {
-      // console.log(ans)
+    ipcRenderer.on('dialog-success', (event, ans) => {
+      console.log('dialog success')
       // this.patentData = ans;
       const length = ans.length
       this.hasData = true
       this.dataLength = length
       this.tableData = ans
       this.setData(length, ans)
+    })
+    // 查询
+    ipcRenderer.on('search-success', (event, ans) => {
+      const { done, code } = ans
+      if (done && code === 0) {
+        // 更新表格数据和操作日志
+        this.dataLength--
+        this.count++
+        const currentRow = this.tableData.shift()
+        const currentApplyNum = currentRow && currentRow.applyNum
+        const nextApplyNum = this.tableData[0] && this.tableData[0].applyNum
+        this.setData(this.dataLength, this.tableData)
+        this.renderOperateLog(currentApplyNum)
+        this.recordSearchSuccess = true
+        if (!this.stopApp) {
+          this.repeatSearch(nextApplyNum)
+        }
+      }
+    })
+    ipcRenderer.on('closePage', (event, ans) => {
+      console.log('page closed')
+      this.openBowser = false
+      this.startText = '一键启动'
+    })
+    ipcRenderer.on('pageJump', (event, ans) => {
+      const { pageJumpCount, url } = ans
+      this.pageJumpCount = pageJumpCount
+      this.puppeteerPageUrl = url
     })
     ipcRenderer.on('errorHandle', (event, ans) => {
       const { message } = ans
@@ -291,15 +316,10 @@ export default {
         message: message
       })
     })
-    ipcRenderer.on('closePage', (event, ans) => {
-      console.log('page closed')
-      this.openBowser = false
-      this.startText = '一键启动'
-    })
-    ipcRenderer.on('pageJump', (event, ans) => {
-      console.log('跳转次数', ans)
-      this.pageJumpCount = ans
-    })
+  },
+  beforeDestroy () {
+    // 大坑,当出现页面跳转时,不卸载会重复监听
+    ipcRenderer.removeAllListeners()
   }
 }
 </script>
@@ -318,6 +338,12 @@ export default {
       padding: 6px 8px 0;
       input {
         height: 30px;
+      }
+      .el-form-item {
+        margin-bottom: 8px;
+      }
+      .confirm-account {
+        margin-bottom: 8px;
       }
     }
     .btns-wrapper {
@@ -357,7 +383,7 @@ export default {
       position: absolute;
       width: 490px;
       min-height: 160px;
-      margin-top: 20px;
+      margin-top: 50px;
       border: 1px solid #ebeef5;
       text-align: left;
       font-size: 14px;

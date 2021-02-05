@@ -15,10 +15,18 @@ const puppeteer = require("puppeteer");
 const { parseExcel } = require('./utils')
 const http = require('http');
 const os = require("os");
+const Store = require('electron-store');
 
 const isDevelopment = process.env.NODE_ENV !== 'production'
-let win, browser, page, excelPath, pageJumpCount = 0, browserPath = ''
+let win, browser, page, excelPath, pageJumpCount = 0, searchCount = 1
 global.startRow = 3
+
+// 错误码,-100: 获取chrome路径失败;-200: 查询失败
+
+const store = new Store();
+store.set('unicorn', '🦄');;
+console.log('userData', app.getPath('userData'));
+global.browserPath = store.get('browserPath')
 
 function checkOperatingSystem(type) {
   switch (type) {
@@ -68,8 +76,8 @@ protocol.registerSchemesAsPrivileged([
 
 function getChromeDefaultPath () {
   return new Promise((resolve, reject) => {
-    if(browserPath) {
-      fs.stat(browserPath, (err, stat) => {
+    if(global.browserPath) {
+      fs.stat(global.browserPath, (err, stat) => {
         if(err) {
           console.log('你的路径下没有chrome')
           win.webContents.send('errorHandle', { message: '你的路径下没有chrome', code: -100 })
@@ -78,14 +86,14 @@ function getChromeDefaultPath () {
             code: -100
           })
         } else {
-          resolve(browserPath)
+          resolve(global.browserPath)
         }
 
       })
     } else {
       fs.stat('C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', (err1, stat) => {
         if(err1) {
-          resolve('')     // 不能抛错
+          resolve('')     // 不能抛错,不然无法执行后续的chrome路径查找
         } else {
           resolve('C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe')
         }
@@ -259,48 +267,115 @@ async function verifyCode () {
   return base64data
 }
 
-async function searchPatent (applyNum) {
+// 这个方法绝了
+async function shot(page, imgSelector, type = "png", ifAddPrefix) {
+  // 先创建并绘制canvas。
+  let canvasId = await page.evaluate(function (select) {
+      let target = document.querySelector(select);
+      if (!target) {
+          throw new Error("未找到选择器：" + select);
+      }
+      if (target.tagName.toLowerCase() !== "img") {
+          throw new Error("本截图只支持命中img节点的选择器，请重新设定选择器。");
+      }
+      let id = "ca_"+String(Math.random()).split(".")[1];
+      let width = target.clientWidth;
+      let height = target.clientHeight;
+      /**
+       * @type {HTMLCanvasElement}
+       */
+      let canvasElement = document.createElement("canvas");
+      canvasElement.style.position = "fixed";
+      canvasElement.style.zIndex = "999999";
+      canvasElement.style.top = "0";
+      canvasElement.style.left = "0";
+      canvasElement.style.width = width + "px";
+      canvasElement.style.height = height + "px";
+      canvasElement.id = id;
+      document.body.append(canvasElement);
+      canvasElement.style.display = "block";
+      canvasElement.width = width;
+      canvasElement.height = height;
+      /**
+       * @type {CanvasRenderingContext2D}
+       */
+      let context = canvasElement.getContext("2d");
+      // 绘制白色背景，有些验证码可能是透明背景。
+      context.fillStyle = "#FFFFFF";
+      context.fillRect(0,0, width, height);
+      context.drawImage(target,0, 0, target['naturalWidth'], target['naturalHeight'],0,0, width, height);
+      return id;
+  }, imgSelector);
+  /**
+   * 添加并绘制好了之后，再截图绘制好了的canvas。
+   * @type {Base64ScreenShotOptions}
+   */
+  let shotOption = {type: type, encoding: "base64"};
+  let element = await page.$(`#${canvasId}`);
+  shotOption.clip = await element.boundingBox();
+  let base64 = await page.screenshot(shotOption);
+  if(isDevelopment) {
+    fs.writeFile('./base64.txt', base64, 'utf-8', (error) => {
+    })
+  }
+  let result = ifAddPrefix ? "data:image/" + type + ";base64," + base64.toString() : base64.toString();
+  // 图截好了，把这个canvas移除。
+  await page.$eval(`#${canvasId}`, function (element) {
+      element.remove();
+  });
+  return result;
+}
+
+// TODO:验证码错误处理
+async function searchPatent (applyNum, event) {
   // select-key:shenqingh是一个非法选择器名
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     try {
-      page.waitForSelector('tr td:first-child').then(async () => {
-        await page.type('tr td:nth-child(2) input', applyNum, { delay: 100 })
-        // 输入验证码
-        let base64data
-        // let base64data = await verifyCode()    // 请求不到
-        // 提示加载中
-        await page.type('#very-code', '拼命计算')
+      // 限定必须从搜索页开始执行, cn/txnPantentInfoList, cn/txnQueryOrdinaryPatents
+      // 注意此处可能是txnQueryFeeData,难道没有导航过来?
+      const currentUrl = await page.url()
+      // console.log('开始搜索前url', currentUrl)
+      if(!currentUrl.includes('cpquery.sipo.gov.cn/txnPantentInfoList.do') && !currentUrl.includes('cpquery.sipo.gov.cn/txnQueryOrdinaryPatents.do')) {
+        throw new Error('你必须从搜索页面开始执行脚本')
+      }
+      // 输入前清空申请号和验证码
+      await page.evaluate(() => {
+        document.querySelector('tr td:nth-child(2) input').value = ''
+        document.getElementById('very-code').value = ''
+      })
+      // if(searchCount >= 2) {    // 非首次
+      // }
+      await page.type('tr td:nth-child(2) input', applyNum, { delay: 100 })
+      // 输入验证码
+      let base64data
+      // let base64data = await verifyCode()    // 请求不到
+      // 提示加载中
+      await page.type('#very-code', '拼命计算')
 
-        // #authImg截屏
-        let authImg = await page.waitForSelector('#authImg')
-        let imgBuffer = await authImg.screenshot({
-          omitBackground: false
-        })
-        await page.screenshot({       // 网页不知道为啥变小不能恢复了
-          fullPage: true
-        })
-        base64data = imgBuffer.toString('base64')
-        // console.log(base64data)
+      // #authImg截屏
+      base64data = await shot(page, '#authImg', 'png', false)
 
-        const recognition = await getRecognition(base64data)
-        console.log('识别结果', recognition)
-        await page.evaluate(() => {
-          document.getElementById('very-code').value = ''
-        })
-        await page.type('#very-code', recognition, { delay: 1000 })
-        const button = await page.$('tr:last-child td:last-child a')
-        await button.click()
+      const recognition = await getRecognition(base64data)
+      console.log('验证码识别结果', recognition)
+      await page.evaluate(() => {
+        document.getElementById('very-code').value = ''
+      })
+      await page.type('#very-code', recognition, { delay: 1000 })
+      const button = await page.$('tr:last-child td:last-child a')
+      await button.click()
 
-        // 点击费用信息
-        let feeInfo = await page.waitForSelector('.content_boxx > ul > li:nth-child(3) a')
-        // console.log(feeInfo)
-        await Promise.all([
-          feeInfo.click(),
-          page.waitForNavigation({ waitUntil: 'load' }) // 解决高并发导致的报错
-        ])
-        // 复制查询后的结果
-        await page.waitForSelector('.imfor_table_grid tr:nth-child(2) td:nth-child(1) span')
-        let feeData = await copySearchResult()   // ['种类', '600', '2020-01-17', '未缴费']
+      // 点击费用信息,实际上跳往
+      // http://cpquery.sipo.gov.cn/txnQueryFeeData.do?select-key:shenqingh=2010101476746&select-key:zhuanlilx=1&select-key:gonggaobj=&select-key:backPage=http://cpquery.sipo.gov.cn/txnQueryOrdinaryPatents.do?select-key:sortcol=&select-key:sort=&select-key:shenqingh=2010101476746&select-key:zhuanlimc=&select-key:shenqingrxm=&select-key:zhuanlilx=&select-key:shenqingr_from=&select-key:shenqingr_to=&verycode=3&inner-flag:open-type=window
+      // &inner-flag:flowno=1612505970499&token=A6A2784C08124078B64EA408ABE7F0FC&inner-flag:open-type=window&inner-flag:flowno=1612505984636
+      let feeInfo = await page.waitForSelector('.content_boxx > ul > li:nth-child(3) a', { timeout: 0 })
+      console.log('已找到费用信息按钮')     // 后面动作总是未触发,难道是因为js文件没加载过来?
+      await page.waitForTimeout(1000)
+      await feeInfo.click()
+      // 复制查询后的结果
+      await page.waitForSelector('.imfor_table', { timeout: 0 })
+      // ['种类', '600', '2020-01-17', '未缴费']
+      copySearchResult().then(feeData => {
+        console.log('copy result', feeData)     // 'pos||'什么意思?
         resolve({
           feeType: feeData[0],
           payableAmount: +feeData[1],
@@ -317,10 +392,10 @@ async function searchPatent (applyNum) {
 
 function copySearchResult () {
   return Promise.all([
-    page.$eval('.imfor_table_grid tr:nth-child(2) td:nth-child(1) span', el => el.title),
-    page.$eval('.imfor_table_grid tr:nth-child(2) td:nth-child(2) span', el => el.title),
-    page.$eval('.imfor_table_grid tr:nth-child(2) td:nth-child(3) span', el => el.title),
-    page.$eval('.imfor_table_grid tr:nth-child(2) td:nth-child(4) span', el => el.title)
+    page.$eval('.imfor_table_grid tbody > tr:nth-child(2) td:nth-child(1) > span', el => el.title),
+    page.$eval('.imfor_table_grid tbody > tr:nth-child(2) td:nth-child(2) > span', el => el.title),
+    page.$eval('.imfor_table_grid tbody > tr:nth-child(2) td:nth-child(3) > span', el => el.title),
+    page.$eval('.imfor_table_grid tbody > tr:nth-child(2) td:nth-child(4) > span', el => el.title)
   ])
 
 }
@@ -339,7 +414,7 @@ function formataFeeData (data={}) {
 // electron 从渲染进程访问主进程除ipc外可以使用remote，从主进程渲染进程使用webContents. executeJavascript 在页面执行脚本，如果是puppeteer,page本身也提供访问页面元素的api
 
 if(!isDevelopment) {
-  // Menu.setApplicationMenu(null)
+  Menu.setApplicationMenu(null)
 }
 
 async function createWindow () {
@@ -347,7 +422,7 @@ async function createWindow () {
   // Create the browser window.
   win = new BrowserWindow({
     width: 820,
-    height: 670,
+    height: 730,
     webPreferences: {
       // Use pluginOptions.nodeIntegration, leave this alone
       // See nklayman.github.io/vue-cli-plugin-electron-builder/guide/security.html#node-integration for more info
@@ -368,10 +443,18 @@ async function createWindow () {
 
   ipcMain.on('start', async (event, ans) => {
     await startPuppeteer(event)
-    page.on('load', (e) => {
-      console.log('puppeteer page loaded')
+    page.on('load', async (e) => {
+      // http://cpquery.sipo.gov.cn/
+      // http://cpquery.sipo.gov.cn/txnDisclaimerDetail.do?time=1612493729094&select-key:yuzhong=zh&select-key:gonggaolx=3
+      // http://cpquery.sipo.gov.cn/txnPantentInfoList.do?inner-flag:open-type=window&inner-flag:flowno=1612493805730
+      // http://cpquery.sipo.gov.cn/txnQueryFeeData.do?select-key:shenqingh=2010101476746&select-key:zhuanlilx=1&select-key:gonggaobj=&select-key:backPage=http%3A%2F%2Fcpquery.sipo.gov.cn%2FtxnQueryOrdinaryPatents.do%3Fselect-key%3Asortcol%3D%26select-key%3Asort%3D%26select-key%3Ashenqingh%3D2010101476746%26select-key%3Azhuanlimc%3D%26select-key%3Ashenqingrxm%3D%26select-key%3Azhuanlilx%3D%26select-key%3Ashenqingr_from%3D%26select-key%3Ashenqingr_to%3D%26verycode%3D2%26inner-flag%3Aopen-type%3Dwindow%26inner-flag%3Aflowno%3D1612515215121&token=81CDF18CB5E947F6B6A7C89B40AF95AF&inner-flag:open-type=window&inner-flag:flowno=1612515216427
+      let url = await page.url()
+      // console.log('puppeteer page loaded', e, url)
       pageJumpCount++
-      win.webContents.send('pageJump', pageJumpCount)
+      win.webContents.send('pageJump', {
+        pageJumpCount,
+        url
+      })
     })
     page.on('close', () => {
       console.log('puppeteer page closed')
@@ -382,7 +465,8 @@ async function createWindow () {
   })
   ipcMain.on('setPath', (event, ans) => {
     console.log('用户修改的path', ans)
-    browserPath = ans
+    global.browserPath = ans
+    store.set('browserPath', ans)
   })
   ipcMain.on('dialog', (event, ans) => {
     const path = dialog.showOpenDialogSync({
@@ -401,7 +485,7 @@ async function createWindow () {
       // fs.writeFileSync('./data.xlsx',content, 'utf-8')   打包后这个操作报错,只读文件不能写入
       excelPath = path[0]
       const patentData = parseExcel(path[0])[0] // 因为excel有多个sheet
-      event.reply('dialogSuccess', patentData)
+      event.reply('dialog-success', patentData)
     }
   })
   // 登录验证
@@ -419,23 +503,41 @@ async function createWindow () {
   // 查询专利
   ipcMain.on('search', async (event, ans) => {
     try {
-      // 如果有返回点击返回
-      // const backToPage = await page.$('#backToPage a')
-      // if(backToPage) {
-      //   await backToPage.click()
-      // }
-      console.log(page.url())
-
-      const data = await searchPatent(ans)
-      console.log('查询后的费用数据', data)
+      // 如果在费用查询页点击返回
+      const currentUrl = await page.url()
+      // console.log('currentUrl', currentUrl)
+      if(currentUrl.includes('txnQueryFeeData')) {
+        const backPage = await page.$('#backToPage a')
+        await backPage.click()
+        await page.waitForNavigation({ waitUntil: 'load', timeout: 0 })
+      }
+      const data = await searchPatent(ans, event)
+      searchCount++
+      // console.log('查询后的费用数据', data)
       // 将查询结果插入新列另存,为防止同时多次写入文件,按顺序执行
       const newExcelDataArr = formataFeeData(data)
       await insertDataFromExcel(excelPath, 1, newExcelDataArr)
       global.startRow++
-      event.returnValue = true
+      // event.returnValue = true     // 渲染界面会卡住
+      event.reply('search-success', {
+        done: true,
+        code: 0
+      })
     } catch (error) {
-      event.returnValue = false
+      // try中报错这里要处理或者抛出,让全局错误回调处理,否则没有结果
+      console.log(error.message)
+      throw error
+      // event.reply('search-success', {
+      //   done: true,
+      //   ...error,
+      //   code: -200
+      // })
     }
+  })
+  // 数据持久化
+  ipcMain.on('setStore', (event, ans) => {
+    const { key, value } = ans
+    store.set(key, value)
   })
 }
 
@@ -486,7 +588,6 @@ if (isDevelopment) {
 
 process.on('unhandledRejection', (reason, promise) => {
   const { code } = reason
-  console.log(code)
   if(code === -100) return
   console.log('Unhandled Rejection:', reason)
   win.webContents.send('errorHandle', reason)

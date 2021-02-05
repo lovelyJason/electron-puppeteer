@@ -5,7 +5,10 @@
       <!-- | -->
       <!-- <router-link to="/about">About</router-link> -->
     </div>
-    <router-view/>
+    <keep-alive>
+      <router-view v-if="$route.meta.keepAlive"></router-view>
+    </keep-alive>
+    <router-view v-if='!$route.meta.keepAlive'></router-view>
   </div>
 </template>
 
@@ -16,6 +19,7 @@
   -moz-osx-font-smoothing: grayscale;
   text-align: center;
   color: #2c3e50;
+  height: 670px;
 }
 
 #nav {
