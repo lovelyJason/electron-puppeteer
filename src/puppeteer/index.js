@@ -1,17 +1,16 @@
 const path = require("path");
 
-function login(page) {
+function login(page, ans) {
+  const { username, password } = ans
   page.waitForSelector('#username1').then(async () => {
     await page.evaluate(() => {
       document.getElementById('username1').value = ''
       document.getElementById('password1').value = ''
     })
-    await page.type("#username1", "13685231955", { delay: 100 });
-    await page.type("#password1", "Ky131328!", { delay: 100 });
+    await page.type("#username1", username, { delay: 100 });
+    await page.type("#password1", password, { delay: 100 });
   })
 }
-
-console.log(process.env.NODE_ENV)
 
 function getExecutablePath () {
   if(process.env.NODE_ENV === 'development') {

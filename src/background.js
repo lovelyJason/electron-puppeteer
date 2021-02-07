@@ -24,8 +24,12 @@ global.startRow = 3
 // 错误码,-100: 获取chrome路径失败;-200: 查询失败
 
 const store = new Store();
-store.set('unicorn', '🦄');;
-console.log('userData', app.getPath('userData'));
+store.set('unicorn', '🦄');
+store.set('users', [
+  { username: '13775637795', password: '1988909db，' },
+  { username: '13685231955', password: 'Ky131328!' },
+])
+console.log(store.get('users'))
 global.browserPath = store.get('browserPath')
 
 function checkOperatingSystem(type) {
@@ -136,7 +140,7 @@ function getChromiumExecPath(event) {
 }
 
 // start puppeteer
-async function startPuppeteer(event) {
+async function startPuppeteer(event, ans) {
   console.log("start up");
   let chromeExecPath = await getChromiumExecPath(event)
   try {
@@ -254,7 +258,7 @@ async function startPuppeteer(event) {
     // await page.evaluate(() => {
     //   alert(1)
     // })
-    login(page)
+    login(page, ans)
   } catch (error) {
     console.log(error.message)
     throw error;      // throw error不要同时和webContents.send同时存在,否则重复报错
@@ -421,7 +425,7 @@ async function createWindow () {
   // Menu.setApplicationMenu()
   // Create the browser window.
   win = new BrowserWindow({
-    width: 820,
+    width: 860,
     height: 730,
     webPreferences: {
       // Use pluginOptions.nodeIntegration, leave this alone
@@ -440,9 +444,12 @@ async function createWindow () {
     // Load the index.html when not in development
     win.loadURL('app://./index.html')
   }
-
+  ipcMain.on('get-users', (event, ans) => {
+    const users = store.get('users') || []
+    event.reply('get-users-success', users)
+  })
   ipcMain.on('start', async (event, ans) => {
-    await startPuppeteer(event)
+    await startPuppeteer(event, ans)
     page.on('load', async (e) => {
       // http://cpquery.sipo.gov.cn/
       // http://cpquery.sipo.gov.cn/txnDisclaimerDetail.do?time=1612493729094&select-key:yuzhong=zh&select-key:gonggaolx=3
@@ -461,7 +468,7 @@ async function createWindow () {
       win.webContents.send('closePage')
     })
     // 发送渲染进程
-    event.reply('startSuccess', '来自主进程')
+    event.reply('start-success', '来自主进程')
   })
   ipcMain.on('setPath', (event, ans) => {
     console.log('用户修改的path', ans)

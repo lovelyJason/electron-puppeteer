@@ -2,8 +2,10 @@
   <div class="home clearfix">
     <!-- <HelloWorld msg="Welcome to Your Vue.js App"/> -->
     <div class="left">
-      <div style="margin-bottom: 8px;">
-        <a href="javascript:void(0)" style="color: #42b983;" @click="jump">选择浏览器路径</a>
+      <div style="margin-bottom: 8px">
+        <a href="javascript:void(0)" style="color: #42b983" @click="jump"
+          >选择浏览器路径</a
+        >
       </div>
       <div class="account">
         <span>选择账号</span>
@@ -11,6 +13,13 @@
           <el-form-item>
             <el-col :span="11">
               <el-input v-model="username" placeholder="账号"></el-input>
+              <!-- <el-autocomplete
+                class="inline-input"
+                v-model="state"
+                :fetch-suggestions="querySearch"
+                placeholder="请输入账号名"
+                @select="handleSelect"
+              ></el-autocomplete> -->
             </el-col>
             <el-col class="line" :span="2">-</el-col>
             <el-col :span="11">
@@ -18,7 +27,6 @@
             </el-col>
           </el-form-item>
         </el-form>
-        <el-button type="success" icon="el-icon-check" circle class="confirm-account"></el-button>
       </div>
       <div class="btns-wrapper">
         <el-button
@@ -75,7 +83,12 @@
         <u-table-column prop="year" label="年份"> </u-table-column>
         <u-table-column fixed="right" label="操作" width="150">
           <template slot-scope="scope">
-            <el-button type="text" size="small" @click="copy(scope.row.applyNum)">复制</el-button>
+            <el-button
+              type="text"
+              size="small"
+              @click="copy(scope.row.applyNum)"
+              >复制</el-button
+            >
           </template>
         </u-table-column>
         <!-- <u-table-column
@@ -118,8 +131,11 @@ export default {
           showOverflow: true
         }
       }),
+      state: '',
+      users: [],
       username: '13775637795',
       password: '1988909db，',
+      options: [{ value: 0, label: '13775637795' }],
       openBowser: false,
       loadBrowser: false,
       startText: '一键启动',
@@ -139,6 +155,31 @@ export default {
     }
   },
   methods: {
+    getUsers () {
+      ipcRenderer.send('get-users')
+    },
+    querySearch (queryString, cb) {
+      const users = this.users
+      console.log(users)
+      const results = queryString
+        ? users.filter(this.createFilter(queryString))
+        : users
+      // 调用 callback 返回建议列表的数据
+      cb(results)
+    },
+    createFilter (queryString) {
+      console.log(queryString)
+      return (restaurant) => {
+        console.log(restaurant)
+        return (
+          restaurant.username.indexOf(queryString) ===
+          0
+        )
+      }
+    },
+    handleSelect () {
+
+    },
     copy (text) {
       clipboard.writeText(text)
       this.$message({
@@ -162,7 +203,10 @@ export default {
         this.resume()
         return
       }
-      const { code } = ipcRenderer.sendSync('start')
+      const { code } = ipcRenderer.sendSync('start', {
+        username: this.username,
+        password: this.password
+      })
       if (code !== 0) {
         return
       }
@@ -190,7 +234,9 @@ export default {
     },
     resume () {
       // 检查是登录验证
-      const isLoginPage = this.puppeteerPageUrl === 'http://cpquery.sipo.gov.cn/' || this.puppeteerPageUrl === 'http://cpquery.sipo.gov.cn'
+      const isLoginPage =
+        this.puppeteerPageUrl === 'http://cpquery.sipo.gov.cn/' ||
+        this.puppeteerPageUrl === 'http://cpquery.sipo.gov.cn'
       if (isLoginPage) {
         const { flag, text } = ipcRenderer.sendSync('loginCheck')
         if (!flag) {
@@ -266,9 +312,16 @@ export default {
       this.$router.push('/path')
     }
   },
+  created () {
+    this.getUsers()
+  },
   mounted () {
     console.log('home mounted')
-    ipcRenderer.on('startSuccess', (event, ans) => {
+    ipcRenderer.on('get-users-success', (event, ans) => {
+      const users = ans
+      this.users = users
+    })
+    ipcRenderer.on('start-success', (event, ans) => {
       console.log(ans)
     })
     ipcRenderer.on('dialog-success', (event, ans) => {
@@ -328,7 +381,7 @@ export default {
 .home {
   height: 490px;
   .left {
-    width: 289px;
+    width: 332px;
     height: 100%;
     float: left;
     .account {
