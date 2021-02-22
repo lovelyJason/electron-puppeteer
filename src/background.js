@@ -7,6 +7,7 @@ import { login, getLoginVerify } from './puppeteer/index.js'
 import { getRecognition } from './lib/lianzhong.js'
 import { insertDataFromExcel } from './utils'
 // import axios from 'axios'
+import { autoUpdater } from 'electron-updater'
 
 // require('@electron/remote/main').initialize()      // electron 10.0以下版本不兼容
 const fs = require('fs')
@@ -16,6 +17,7 @@ const { parseExcel } = require('./utils')
 const http = require('http');
 const os = require("os");
 const Store = require('electron-store');
+const feedUrl = ''
 
 const isDevelopment = process.env.NODE_ENV !== 'production'
 let win, browser, page, excelPath, pageJumpCount = 0, searchCount = 1
