@@ -1,14 +1,18 @@
 import Vue from 'vue'
 import VueRouter from 'vue-router'
-import Home from '../views/Home.vue'
+// import Home from '../views/Home.vue'
 
 Vue.use(VueRouter)
 
 const routes = [
   {
+    path: '/home',
+    redirect: '/'
+  },
+  {
     path: '/',
     name: 'Home',
-    component: Home,
+    component: () => import(/* webpackChunkName: "home" */ '../views/Home.vue'),
     meta: {
       keepAlive: true
     }
@@ -24,7 +28,12 @@ const routes = [
   {
     path: '/path',
     name: 'path',
-    component: () => import(/* webpackChunkName: "about" */ '../views/SelectBrowser.vue')
+    component: () => import(/* webpackChunkName: "path" */ '../views/SelectBrowser.vue')
+  },
+  {
+    path: '/changelog',
+    name: 'changelog',
+    component: () => import(/* webpackChunkName: "changelog" */ '../views/Changelog.vue')
   }
 ]
 

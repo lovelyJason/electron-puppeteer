@@ -1,6 +1,6 @@
 {
   "name": "patent-task",
-  "version": "0.1.0",
+  "version": "0.0.2",
   "private": true,
   "scripts": {
     "serve": "vue-cli-service serve",
@@ -15,7 +15,9 @@
   "dependencies": {
     "axios": "^0.21.1",
     "core-js": "^3.6.5",
+    "electron-is-dev": "^1.2.0",
     "electron-store": "^7.0.1",
+    "electron-updater": "^4.3.5",
     "element-ui": "^2.15.0",
     "exceljs": "^4.2.0",
     "node-xlsx": "^0.16.1",

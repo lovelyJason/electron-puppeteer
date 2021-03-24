@@ -16,10 +16,13 @@ const { parseExcel } = require('./utils')
 const http = require('http');
 const os = require("os");
 const Store = require('electron-store');
+const isDev = require('electron-is-dev');
 
 const isDevelopment = process.env.NODE_ENV !== 'production'
 let win, browser, page, excelPath, pageJumpCount = 0, searchCount = 1
 global.startRow = 3
+
+// console.log(isDev)
 
 // 错误码,-100: 获取chrome路径失败;-200: 查询失败
 
