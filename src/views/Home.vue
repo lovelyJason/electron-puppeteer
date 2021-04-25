@@ -108,6 +108,9 @@
       </div>
     </div>
     <check-update class="check-update"></check-update>
+    <router-link to="/changelog">
+      <div class="update-log"><i  style="margin-right: 6px;" class="el-icon-chat-line-round"></i>更新日志</div>
+    </router-link>
   </div>
 </template>
 
@@ -384,7 +387,7 @@ export default {
 
 <style lang="less">
 .home {
-  height: 490px;
+  height: calc(~"100% - 44px");
   .left {
     width: 332px;
     height: 100%;
@@ -460,6 +463,14 @@ export default {
     left: 0;
     right: 0;
     margin: 0 auto;
+  }
+  .update-log {
+    position: fixed;
+    bottom: 10px;
+    left: 50%;
+    margin-left: -43px  ;
+    cursor: pointer;
+    color: #26b1e7;
   }
 }
 </style>
