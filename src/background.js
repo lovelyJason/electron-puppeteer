@@ -263,7 +263,8 @@ async function startPuppeteer(event, ans) {
         webdriver: { get: () => undefined }
       });
     });
-    await page.goto("http://cpquery.sipo.gov.cn/");
+    // await page.goto("http://cpquery.sipo.gov.cn/");
+    await page.goto("http://cpquery.cnipa.gov.cn/");
     // await browser.close()
     // win.webContents.send('errorHandle', '呵呵哒')      // ipcMain没有send方法,使用win的属性webContents调用send,该属性负责渲染和控制web页面
     // await page.evaluate(() => {
