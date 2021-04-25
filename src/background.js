@@ -34,8 +34,8 @@ global.startRow = 3
 const store = new Store();
 store.set('unicorn', '🦄');
 store.set('users', [
-  { username: '13775637795', password: ' Ky131328*' },
-  { username: '13685231955', password: 'Ky131328!' },
+  // { username: '566', password: ' 666*' },
+  // { username: '666', password: '666!' },
 ])
 console.log(store.get('users'))
 global.browserPath = store.get('browserPath')
