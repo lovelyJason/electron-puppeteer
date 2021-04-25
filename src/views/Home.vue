@@ -107,16 +107,21 @@
         <div class="content" id="logContent"></div>
       </div>
     </div>
+    <check-update class="check-update"></check-update>
   </div>
 </template>
 
 <script>
 // @ is an alias to /src
 // import HelloWorld from '@/components/HelloWorld.vue'
+import CheckUpdate from './CheckUpdate'
 const { ipcRenderer, clipboard } = require('electron')
 
 export default {
   name: 'Home',
+  components: {
+    CheckUpdate
+  },
   data () {
     return {
       height: 280,
@@ -134,7 +139,7 @@ export default {
       state: '',
       users: [],
       username: '13775637795',
-      password: '1988909db，',
+      password: 'Ky131328*',
       options: [{ value: 0, label: '13775637795' }],
       openBowser: false,
       loadBrowser: false,
@@ -448,6 +453,13 @@ export default {
         padding-top: 6px;
       }
     }
+  }
+  .check-update {
+    position: absolute;
+    bottom: 30px;
+    left: 0;
+    right: 0;
+    margin: 0 auto;
   }
 }
 </style>

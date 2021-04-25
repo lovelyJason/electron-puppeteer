@@ -1,6 +1,6 @@
 {
   "name": "patent-task",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "scripts": {
     "serve": "vue-cli-service serve",
@@ -36,8 +36,11 @@
     "@vue/eslint-config-standard": "^5.1.2",
     "babel-eslint": "^10.1.0",
     "babel-plugin-component": "^1.1.1",
+    "babel-preset-env": "^1.7.0",
+    "babel-register": "^6.26.0",
     "electron": "^9.0.0",
     "electron-devtools-installer": "^3.1.0",
+    "electron-log": "^4.3.2",
     "electron-updater": "^4.3.5",
     "eslint": "^6.7.2",
     "eslint-plugin-import": "^2.20.2",
@@ -59,11 +62,5 @@
       "vue-cli-service lint",
       "git add"
     ]
-  },
-  "build": {
-    "publish": {
-      "provider": "github",
-      "owner": "lovelyJason"
-    }
   }
 }

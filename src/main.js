@@ -13,11 +13,14 @@ import {
   Form,
   FormItem,
   Col,
-  Message,
   Loading,
   Select,
   Option,
-  Autocomplete
+  Autocomplete,
+  Dialog,
+  Progress,
+  Message,
+  MessageBox
 } from 'element-ui'
 import UmyUi from 'umy-ui'
 import 'umy-ui/lib/theme-chalk/index.css'
@@ -38,10 +41,17 @@ Vue.use(Loading.directive)
 Vue.use(Select)
 Vue.use(Option)
 Vue.use(Autocomplete)
+Vue.use(Dialog)
+Vue.use(Progress)
 Vue.use(UmyUi)
 
 Vue.prototype.$message = Message
 Vue.prototype.$loading = Loading.service
+
+Vue.prototype.$msgbox = MessageBox
+Vue.prototype.$alert = MessageBox.alert
+Vue.prototype.$confirm = MessageBox.confirm
+Vue.prototype.$prompt = MessageBox.prompt
 
 new Vue({
   router,

@@ -1,3 +1,4 @@
 src/background.js
+src/checkupdate.js
 src/puppeteer/*.js
 src/lib/*.js

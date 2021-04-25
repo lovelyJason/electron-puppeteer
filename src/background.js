@@ -3,13 +3,12 @@
 import { app, protocol, BrowserWindow, ipcMain, dialog, Menu } from 'electron'
 import { createProtocol } from 'vue-cli-plugin-electron-builder/lib'
 import installExtension, { VUEJS_DEVTOOLS } from 'electron-devtools-installer'
-import { login, getLoginVerify } from './puppeteer/index.js'
+import { login, getLoginVerify, getResponseBody } from './puppeteer/index.js'
 import { getRecognition } from './lib/lianzhong.js'
 import { insertDataFromExcel } from './utils'
-// import axios from 'axios'
-import { autoUpdater } from 'electron-updater'
-
+import Update from './checkupdate'; // 引入上面的文件
 // require('@electron/remote/main').initialize()      // electron 10.0以下版本不兼容
+
 const fs = require('fs')
 const path = require('path')
 const puppeteer = require("puppeteer");
@@ -17,7 +16,11 @@ const { parseExcel } = require('./utils')
 const http = require('http');
 const os = require("os");
 const Store = require('electron-store');
-const feedUrl = ''
+const log = require('electron-log')
+
+log.transports.console.level = false;
+log.transports.console.level = 'silly';
+
 
 const isDevelopment = process.env.NODE_ENV !== 'production'
 let win, browser, page, excelPath, pageJumpCount = 0, searchCount = 1
@@ -28,11 +31,14 @@ global.startRow = 3
 const store = new Store();
 store.set('unicorn', '🦄');
 store.set('users', [
-  { username: '13775637795', password: '1988909db，' },
+  { username: '13775637795', password: ' Ky131328*' },
   { username: '13685231955', password: 'Ky131328!' },
 ])
 console.log(store.get('users'))
 global.browserPath = store.get('browserPath')
+
+const STORE_PATH = app.getPath('userData')
+console.log('用户目录', STORE_PATH)
 
 function checkOperatingSystem(type) {
   switch (type) {
@@ -349,8 +355,6 @@ async function searchPatent (applyNum, event) {
         document.querySelector('tr td:nth-child(2) input').value = ''
         document.getElementById('very-code').value = ''
       })
-      // if(searchCount >= 2) {    // 非首次
-      // }
       await page.type('tr td:nth-child(2) input', applyNum, { delay: 100 })
       // 输入验证码
       let base64data
@@ -358,17 +362,30 @@ async function searchPatent (applyNum, event) {
       // 提示加载中
       await page.type('#very-code', '拼命计算')
 
+      // XXX: 验证码识别待优化
       // #authImg截屏
-      base64data = await shot(page, '#authImg', 'png', false)
+      // base64data = await shot(page, '#authImg', 'png', false)
+      // const recognition = await getRecognition(base64data)
+      // console.log('验证码识别结果', recognition)
+      const recognition = '8'
 
-      const recognition = await getRecognition(base64data)
-      console.log('验证码识别结果', recognition)
       await page.evaluate(() => {
         document.getElementById('very-code').value = ''
+        // 干掉验证码校验
+        $('#query').unbind('click')
+        $("#query").on('click', function() {
+          var verycode=$('#very-code').val();
+
+          var page = new pageDefine('/txnQueryOrdinaryPatents.do');
+          page.addParameters('select-key', 'select-key');
+          page.addValue(verycode,'verycode');
+          page.goPage();
+        });
       })
       await page.type('#very-code', recognition, { delay: 1000 })
       const button = await page.$('tr:last-child td:last-child a')
       await button.click()
+      const codeRes = await getResponseBody(page, 'freeze.main')
 
       // 点击费用信息,实际上跳往
       // http://cpquery.sipo.gov.cn/txnQueryFeeData.do?select-key:shenqingh=2010101476746&select-key:zhuanlilx=1&select-key:gonggaobj=&select-key:backPage=http://cpquery.sipo.gov.cn/txnQueryOrdinaryPatents.do?select-key:sortcol=&select-key:sort=&select-key:shenqingh=2010101476746&select-key:zhuanlimc=&select-key:shenqingrxm=&select-key:zhuanlilx=&select-key:shenqingr_from=&select-key:shenqingr_to=&verycode=3&inner-flag:open-type=window
@@ -428,7 +445,7 @@ async function createWindow () {
   // Create the browser window.
   win = new BrowserWindow({
     width: 860,
-    height: 730,
+    height: 750,
     webPreferences: {
       // Use pluginOptions.nodeIntegration, leave this alone
       // See nklayman.github.io/vue-cli-plugin-electron-builder/guide/security.html#node-integration for more info
@@ -436,8 +453,9 @@ async function createWindow () {
       enableRemoteModule: true
     }
   })
-
-  if (process.env.WEBPACK_DEV_SERVER_URL) {
+  // 注册更新检查
+  Update(win, log);
+  if (process.env.WEBPACK_DEV_SERVER_URL) {     // http://localhost:8080/
     // Load the url of the dev server if in development mode
     await win.loadURL(process.env.WEBPACK_DEV_SERVER_URL)
     if (!process.env.IS_TEST) win.webContents.openDevTools()
@@ -599,5 +617,6 @@ process.on('unhandledRejection', (reason, promise) => {
   const { code } = reason
   if(code === -100) return
   console.log('Unhandled Rejection:', reason)
+  log.error(reason.message || '系统异常')
   win.webContents.send('errorHandle', reason)
 })

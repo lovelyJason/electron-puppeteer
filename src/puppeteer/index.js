@@ -50,7 +50,25 @@ async function getLoginVerify() {
   }
 }
 
+function getResponseBody(page, url) {
+  return new Promise((resolve, reject) => {
+    page.once('response', async (response) => {
+      if(response.url().includes(url)) {
+        try {
+          const body = await response.text()
+          console.log('response.text(): ', body, typeof body)     // 不能用on,会触发多次
+          resolve(body)
+        } catch (error) {
+          console.log('请求结果出错', error.message)
+          reject(error)
+        }
+      }
+    })
+  })
+}
+
 module.exports = {
   login,
-  getLoginVerify
+  getLoginVerify,
+  getResponseBody
 };
