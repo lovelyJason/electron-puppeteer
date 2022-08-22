@@ -459,7 +459,7 @@ export default {
   }
   .check-update {
     position: absolute;
-    bottom: 30px;
+    bottom: 50px;
     left: 0;
     right: 0;
     margin: 0 auto;
@@ -468,7 +468,7 @@ export default {
     position: fixed;
     bottom: 10px;
     left: 50%;
-    margin-left: -43px  ;
+    margin-left: -43px;
     cursor: pointer;
     color: #26b1e7;
   }
