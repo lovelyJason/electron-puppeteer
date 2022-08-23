@@ -35,9 +35,6 @@
           v-loading="loadBrowser"
           >{{ startText }}</el-button
         >
-        <el-button v-if="isDev" type="success" @click="debug">debug</el-button>
-        <el-button type="danger" @click="onStopClick">停止</el-button>
-        <el-button type="warning" @click="openDialog">导入excel</el-button>
       </div>
       <div class="remind">
         注意事项: <br />
@@ -45,66 +42,18 @@
           <li>
             一键启动后会自动帮你输入账号密码,但是图形验证码要你自己手动点,然后再回来点第一个按钮
           </li>
-          <li>我将从你的表格第三行开始取数据,并在第九列之后添加查询结果</li>
+          <li>......没有</li>
         </ul>
       </div>
     </div>
     <div class="right">
-      <!-- <el-table :data="patentData" style="width: 100%">
-        <el-table-column prop="0" label="流水号">
-        </el-table-column>
-        <el-table-column prop="1" label="申请日期">
-        </el-table-column>
-        <el-table-column prop="applyNum" label="申请号"> </el-table-column>
-        <el-table-column prop="3" label="发明名称"> </el-table-column>
-        <el-table-column prop="4" label="申请人"> </el-table-column>
-        <el-table-column prop="5" label="费用"> </el-table-column>
-        <el-table-column prop="6" label="月份"> </el-table-column>
-        <el-table-column prop="7" label="年份"> </el-table-column>
-      </el-table> -->
-      <u-table
-        ref="plTable"
-        :max-height="height"
-        use-virtual
-        showBodyOverflow="title"
-        showHeaderOverflow="title"
-        :row-height="rowHeight"
-        border
-        @row-click="onRowClick"
-      >
-        <u-table-column prop="number" label="流水号"> </u-table-column>
-        <u-table-column prop="applyDate" label="申请日期"> </u-table-column>
-        <u-table-column prop="applyNum" label="申请号" width="150">
-        </u-table-column>
-        <u-table-column prop="inventName" label="发明名称"> </u-table-column>
-        <u-table-column prop="applyPerson" label="申请人"> </u-table-column>
-        <u-table-column prop="fee" label="费用"> </u-table-column>
-        <u-table-column prop="month" label="月份"> </u-table-column>
-        <u-table-column prop="year" label="年份"> </u-table-column>
-        <u-table-column fixed="right" label="操作" width="150">
-          <template slot-scope="scope">
-            <el-button
-              type="text"
-              size="small"
-              @click="copy(scope.row.applyNum)"
-              >复制</el-button
-            >
-          </template>
-        </u-table-column>
-        <!-- <u-table-column
-          v-for="item in columns"
-          :key="item.id"
-          :resizable="item.resizable"
-          :show-overflow-tooltip="item.showOverflow"
-          :prop="item.prop"
-          :label="item.label"
-          :fixed="item.fixed"
-          :width="item.width"
-        /> -->
-      </u-table>
       <div class="operate-log">
         <div class="header">操作日志</div>
-        <div class="content" id="logContent"></div>
+        <div class="content" id="logContent">
+          <ul>
+            <li v-for="(log, index) in logs" :key="index">{{ log }}</li>
+          </ul>
+        </div>
       </div>
     </div>
     <check-update class="check-update"></check-update>
@@ -141,8 +90,8 @@ export default {
       }),
       state: '',
       users: [],
-      username: '666',
-      password: '666',
+      username: 'yxsj236103',
+      password: 'yxsj123456',
       options: [{ value: 0, label: '666' }],
       openBowser: false,
       loadBrowser: false,
@@ -154,7 +103,8 @@ export default {
       stopApp: false,
       pageJumpCount: 0,
       puppeteerPageUrl: '',
-      recordSearchSuccess: false
+      recordSearchSuccess: false,
+      logs: []
     }
   },
   computed: {
@@ -215,24 +165,10 @@ export default {
         username: this.username,
         password: this.password
       })
-      if (code !== 0) {
-        return
-      }
-      this.openBowser = true
-      this.loadBrowser = true
-      console.log('start up')
-      setTimeout(() => {
-        this.loadBrowser = false
-        this.startText = '点我继续启动'
-      }, 3000)
+      console.log(code)
     },
-    renderOperateLog (currentApplyNum) {
-      const count = this.count
-      const logContent = document.getElementById('logContent')
-      const text = logContent.innerText
-      logContent.innerText =
-        text +
-        `> 第${count}条数据${currentApplyNum}操作完成,正在保存数据并开始下一条...\n`
+    renderOperateLog () {
+      // document.getElementById('logContent')
     },
     repeatSearch (applyNum) {
       // 同步,会堵塞渲染进程
@@ -240,81 +176,25 @@ export default {
       this.recordSearchSuccess = false
       ipcRenderer.send('search', applyNum)
     },
+    postTask () {
+      ipcRenderer.send('postTask')
+    },
     resume () {
       // 检查是登录验证
       const isLoginPage =
-        this.puppeteerPageUrl === 'http://cpquery.sipo.gov.cn/' ||
-        this.puppeteerPageUrl === 'http://cpquery.sipo.gov.cn'
+        this.puppeteerPageUrl === 'https://ip.jsipp.cn' ||
+        this.puppeteerPageUrl === 'https://ip.jsipp.cn/'
       if (isLoginPage) {
-        const { flag, text } = ipcRenderer.sendSync('loginCheck')
-        if (!flag) {
-          this.$message({
-            type: 'error',
-            message: `${text}` || '哪里出问题了'
-          })
-          return
-        }
-      }
-      // 检查是否上传文件
-      if (!this.tableData.length) {
         this.$message({
           type: 'error',
-          message: '请先上传excel'
+          message: '出问题了'
         })
-        return
       }
       this.$message({
         type: 'success',
-        message: '准备好了,努力发射中,请放开你的双手'
+        message: '准备好了,双手离开键盘'
       })
-      const applyNum = this.tableData[0].applyNum
-      this.repeatSearch(applyNum)
-    },
-    async debug () {
-      if (!this.tableData.length) {
-        this.$message({
-          type: 'error',
-          message: '请先上传excel'
-        })
-        return
-      }
-      const applyNum = this.tableData[0].applyNum
-      this.repeatSearch(applyNum)
-    },
-    openDialog () {
-      ipcRenderer.send('dialog')
-    },
-    setData (num, ans) {
-      const that = this
-      const data = Array.from({ length: num }, (_, idx) => {
-        const record = ans[idx] || {}
-        return {
-          id: idx + 1,
-          applyNum: record.applyNum,
-          number: record.number,
-          applyDate: record.applyDate,
-          inventName: record.inventName,
-          applyPerson: record.applyPerson,
-          fee: record.fee,
-          month: record.month,
-          year: record.year
-        }
-      })
-      // 大坑,此处ref没获取到,dom未加载完,还有个大坑,ipcRender要在页面注销前卸载监听
-      that.$nextTick(() => {
-        that.$refs.plTable.reloadData(data)
-      })
-    },
-    onRowClick (row) {
-      console.log(row)
-    },
-    onStopClick () {
-      this.stopApp = true
-      this.$message({
-        type: 'success',
-        message: '好的, 已经为您停止,请等待当前操作处理完'
-      })
-      // ipcRenderer.send('stop-search')
+      this.postTask()
     },
     jump () {
       this.$router.push('/path')
@@ -325,39 +205,9 @@ export default {
   },
   mounted () {
     console.log('home mounted')
-    ipcRenderer.on('get-users-success', (event, ans) => {
-      const users = ans
-      this.users = users
-    })
-    ipcRenderer.on('start-success', (event, ans) => {
-      console.log(ans)
-    })
-    ipcRenderer.on('dialog-success', (event, ans) => {
-      console.log('dialog success')
-      // this.patentData = ans;
-      const length = ans.length
-      this.hasData = true
-      this.dataLength = length
-      this.tableData = ans
-      this.setData(length, ans)
-    })
-    // 查询
-    ipcRenderer.on('search-success', (event, ans) => {
-      const { done, code } = ans
-      if (done && code === 0) {
-        // 更新表格数据和操作日志
-        this.dataLength--
-        this.count++
-        const currentRow = this.tableData.shift()
-        const currentApplyNum = currentRow && currentRow.applyNum
-        const nextApplyNum = this.tableData[0] && this.tableData[0].applyNum
-        this.setData(this.dataLength, this.tableData)
-        this.renderOperateLog(currentApplyNum)
-        this.recordSearchSuccess = true
-        if (!this.stopApp) {
-          this.repeatSearch(nextApplyNum)
-        }
-      }
+    ipcRenderer.on('log', (event, ans) => {
+      this.logs.push(ans)
+      console.log(this.logs)
     })
     ipcRenderer.on('closePage', (event, ans) => {
       console.log('page closed')
@@ -444,7 +294,7 @@ export default {
       position: absolute;
       width: 490px;
       min-height: 160px;
-      margin-top: 50px;
+      height: 80%;
       border: 1px solid #ebeef5;
       text-align: left;
       font-size: 14px;
@@ -454,6 +304,9 @@ export default {
       }
       #logContent {
         padding-top: 6px;
+        li {
+          margin-top: 8px;
+        }
       }
     }
   }

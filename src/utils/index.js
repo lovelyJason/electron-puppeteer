@@ -66,8 +66,50 @@ function insertDataFromExcel (path, sheet = 1, cellData = []) {
   })
 }
 
+let timeout = function (delay) {
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      try {
+        resolve(1)
+      } catch (e) {
+        reject(0)
+      }
+    }, delay);
+  })
+}
+let interval = function(p, delay, limit) {
+  let count = 0
+  return new Promise((resolve, reject) => {
+    let timerId = setInterval(async () => {
+      console.log('我处在定时器中')
+      try {
+        count++
+        let res = await p()
+        console.log(count)
+        if(res) {
+          clearInterval(timerId)
+          resolve(1)
+          return
+        }
+        if(count >= limit) {
+          clearInterval(timerId)
+          reject({
+            message: '超出调用限制'
+          })
+          return
+        }
+      } catch (e) {
+        clearInterval(timerId)
+        reject(e)
+      }
+    }, delay);
+  })
+}
+
 module.exports = {
   parseExcel,
   isNumber,
-  insertDataFromExcel
+  insertDataFromExcel,
+  timeout,
+  interval
 }

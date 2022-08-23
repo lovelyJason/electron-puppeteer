@@ -2,13 +2,23 @@ const path = require("path");
 
 function login(page, ans) {
   const { username, password } = ans
-  page.waitForSelector('#username1').then(async () => {
+  return page.waitForSelector('.logindialog-input-user').then(async () => {
     await page.evaluate(() => {
-      document.getElementById('username1').value = ''
-      document.getElementById('password1').value = ''
+      let userEl = document.getElementsByClassName('logindialog-input-user')[0]
+      let pwdEl = document.getElementsByClassName('logindialog-input-password')[0]
+      if(userEl) {
+        userEl.value = ''
+      }
+      if(pwdEl) {
+        pwdEl.value = ''
+      }
     })
-    await page.type("#username1", username, { delay: 100 });
-    await page.type("#password1", password, { delay: 100 });
+    await page.type(".logindialog-input-user", username, { delay: 100 });
+    await page.type(".logindialog-input-password", password, { delay: 100 });
+    let logindialogRemember = await page.$('.logindialog-remember')
+    let submitBtn = await page.$('.logindialog-btn')
+    await logindialogRemember.click()
+    await submitBtn.click()
   })
 }
 
