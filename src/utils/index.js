@@ -66,7 +66,7 @@ function insertDataFromExcel (path, sheet = 1, cellData = []) {
   })
 }
 
-let timeout = function (delay) {
+const timeout = function (delay) {
   return new Promise((resolve, reject) => {
     setTimeout(() => {
       try {
@@ -74,24 +74,27 @@ let timeout = function (delay) {
       } catch (e) {
         reject(0)
       }
-    }, delay);
+    }, delay)
   })
 }
-let interval = function(p, delay, limit) {
+const interval = function (p, delay, limit, cb) {
   let count = 0
   return new Promise((resolve, reject) => {
-    let timerId = setInterval(async () => {
-      console.log('我处在定时器中')
+    const timerId = setInterval(async () => {
       try {
+        console.log('开启定时任务')
+        if (typeof cb === 'function') {
+          cb(timerId)
+        }
         count++
-        let res = await p()
-        console.log(count)
-        if(res) {
+        const res = await p()
+        if (res) {
+          // 执行结果如果达到效果，可以清除定时器
           clearInterval(timerId)
           resolve(1)
           return
         }
-        if(count >= limit) {
+        if (count >= limit && limit !== 0) {
           clearInterval(timerId)
           reject({
             message: '超出调用限制'
@@ -102,7 +105,7 @@ let interval = function(p, delay, limit) {
         clearInterval(timerId)
         reject(e)
       }
-    }, delay);
+    }, delay)
   })
 }
 

@@ -21,8 +21,6 @@
 const { ipcRenderer, remote } = require('electron')
 // 只会执行一次,后续再进来时不会再执行
 
-console.log(remote)
-
 export default {
   data () {
     return {
@@ -50,7 +48,6 @@ export default {
     }
   },
   mounted () {
-    console.log('browserpath mounted')
     const browserPath = remote.getGlobal('browserPath')
     this.path = browserPath
   },
@@ -68,7 +65,7 @@ export default {
     position: relative;
   }
   .el-input {
-    width: 500px;
+    width: 530px;
     margin-bottom: 8px;
     margin-right: 6px;
   }
@@ -79,12 +76,17 @@ export default {
   }
   .bg {
     width: 100%;
-    height: calc(~"100% - 269px");
+    height: calc(~"100% - 229px");
     background: url('https://tva1.sinaimg.cn/large/0072Vf1pgy1foxkiztofjj31hc0u07g2.jpg') no-repeat center;
     background-size: cover;
   }
   .back-home {
     position: absolute;
+    width: 70px;
+    height: 40px;
     bottom: 10px;
+    left: 0;
+    right: 0;
+    margin: 0 auto;
   }
 </style>

@@ -5,6 +5,7 @@ import store from './store'
 
 import {
   Button,
+  Checkbox,
   Table,
   TableColumn,
   RadioGroup,
@@ -12,6 +13,7 @@ import {
   Input,
   Form,
   FormItem,
+  Row,
   Col,
   Loading,
   Select,
@@ -29,6 +31,7 @@ import './assets/style/common.less'
 Vue.config.productionTip = false
 
 Vue.use(Button)
+Vue.use(Checkbox)
 Vue.use(Table)
 Vue.use(TableColumn)
 Vue.use(RadioGroup)
@@ -36,6 +39,7 @@ Vue.use(Radio)
 Vue.use(Input)
 Vue.use(Form)
 Vue.use(FormItem)
+Vue.use(Row)
 Vue.use(Col)
 Vue.use(Loading.directive)
 Vue.use(Select)

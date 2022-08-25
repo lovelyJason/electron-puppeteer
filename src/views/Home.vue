@@ -7,24 +7,33 @@
           >选择浏览器路径</a
         >
       </div>
-      <div class="account">
+      <div class="account section">
         <span>选择账号</span>
-        <el-form ref="form">
+        <el-form ref="form" >
           <el-form-item>
-            <el-col :span="11">
-              <el-input v-model="username" placeholder="账号"></el-input>
-              <!-- <el-autocomplete
-                class="inline-input"
-                v-model="state"
-                :fetch-suggestions="querySearch"
-                placeholder="请输入账号名"
-                @select="handleSelect"
-              ></el-autocomplete> -->
-            </el-col>
-            <el-col class="line" :span="2">-</el-col>
-            <el-col :span="11">
-              <el-input v-model="password" placeholder="密码"></el-input>
-            </el-col>
+            <el-row>
+              <el-col :span="11">
+                <el-input v-model="username" placeholder="账号"></el-input>
+                <!-- <el-autocomplete
+                  class="inline-input"
+                  v-model="state"
+                  :fetch-suggestions="querySearch"
+                  placeholder="请输入账号名"
+                  @select="handleSelect"
+                ></el-autocomplete> -->
+              </el-col>
+              <el-col class="line" :span="2">-</el-col>
+              <el-col :span="11">
+                <el-input v-model="password" placeholder="密码"></el-input>
+              </el-col>
+            </el-row>
+          </el-form-item>
+          <el-form-item class="text-left" label="是否篡改预约量">
+            <el-checkbox v-model="checked"></el-checkbox>
+            <span style="margin-left: 12px;color: #f72525;;">谨慎！除非你知道做什么</span>
+          </el-form-item>
+          <el-form-item class="text-left flex" label="余额">
+            <el-input v-model="balanceNum"></el-input>
           </el-form-item>
         </el-form>
       </div>
@@ -33,16 +42,29 @@
           type="primary"
           @click="startPuppeteer"
           v-loading="loadBrowser"
-          >{{ startText }}</el-button
         >
+          {{ startText }}
+        </el-button>
+        <el-button
+          v-if="isDev"
+          type="primary"
+          @click="debug"
+        >
+          debug
+        </el-button>
+        <el-button
+          type="danger"
+          @click="stopTask"
+        >
+          停止
+        </el-button>
       </div>
       <div class="remind">
         注意事项: <br />
         <ul>
           <li>
-            一键启动后会自动帮你输入账号密码,但是图形验证码要你自己手动点,然后再回来点第一个按钮
+            不要连续点击恢复启动，先停止再恢复启动
           </li>
-          <li>......没有</li>
         </ul>
       </div>
     </div>
@@ -104,7 +126,9 @@ export default {
       pageJumpCount: 0,
       puppeteerPageUrl: '',
       recordSearchSuccess: false,
-      logs: []
+      logs: [],
+      checked: false,
+      balanceNum: 500
     }
   },
   computed: {
@@ -149,6 +173,12 @@ export default {
       if (str && str.trim()) return false
       return true
     },
+    debug () {
+      ipcRenderer.send('debug')
+    },
+    stopTask () {
+      ipcRenderer.send('stopTask')
+    },
     startPuppeteer () {
       if (this.testEmpty(this.username) || this.testEmpty(this.password)) {
         this.$message({
@@ -158,14 +188,19 @@ export default {
         return
       }
       if (this.openBowser) {
-        this.resume()
+        this.restore()
         return
       }
-      const { code } = ipcRenderer.sendSync('start', {
+      const options = {
         username: this.username,
         password: this.password
-      })
-      console.log(code)
+      }
+      if (this.checked) {
+        options.balanceNum = this.balanceNum
+      }
+      ipcRenderer.send('start', options)
+      this.openBowser = true
+      this.startText = '恢复启动'
     },
     renderOperateLog () {
       // document.getElementById('logContent')
@@ -176,25 +211,12 @@ export default {
       this.recordSearchSuccess = false
       ipcRenderer.send('search', applyNum)
     },
-    postTask () {
-      ipcRenderer.send('postTask')
-    },
-    resume () {
-      // 检查是登录验证
-      const isLoginPage =
-        this.puppeteerPageUrl === 'https://ip.jsipp.cn' ||
-        this.puppeteerPageUrl === 'https://ip.jsipp.cn/'
-      if (isLoginPage) {
-        this.$message({
-          type: 'error',
-          message: '出问题了'
-        })
-      }
+    restore () {
       this.$message({
         type: 'success',
         message: '准备好了,双手离开键盘'
       })
-      this.postTask()
+      ipcRenderer.send('restore')
     },
     jump () {
       this.$router.push('/path')
@@ -242,7 +264,7 @@ export default {
     width: 332px;
     height: 100%;
     float: left;
-    .account {
+    .section {
       width: 90%;
       border: 1px solid #ebeef5;
       margin: 0 auto 12px;
@@ -252,6 +274,13 @@ export default {
       }
       .el-form-item {
         margin-bottom: 8px;
+
+        &.flex {
+          display: flex;
+        }
+        &.text-left {
+          text-align: left;
+        }
       }
       .confirm-account {
         margin-bottom: 8px;
@@ -280,8 +309,8 @@ export default {
   }
   .right {
     float: left;
-    width: 490px;
-    height: 100%;
+    width: 400px;
+    height: 80%;
     position: relative;
     tbody {
       tr {
@@ -292,9 +321,9 @@ export default {
     }
     .operate-log {
       position: absolute;
-      width: 490px;
+      width: 100%;
       min-height: 160px;
-      height: 80%;
+      height: 100%;
       border: 1px solid #ebeef5;
       text-align: left;
       font-size: 14px;
@@ -303,6 +332,8 @@ export default {
         border-bottom: 1px dashed#ebeef5;
       }
       #logContent {
+        height: calc(~"100% - 40px");
+        overflow: scroll;
         padding-top: 6px;
         li {
           margin-top: 8px;

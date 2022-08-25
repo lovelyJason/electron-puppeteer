@@ -5,20 +5,25 @@ import { createProtocol } from 'vue-cli-plugin-electron-builder/lib'
 // import installExtension, { VUEJS_DEVTOOLS } from 'electron-devtools-installer'
 import { login, getLoginVerify, getResponseBody } from './puppeteer/index.js'
 import { getRecognition } from './lib/lianzhong.js'
-import { insertDataFromExcel, interval } from './utils'
+import { insertDataFromExcel, interval, timeout } from './utils'
 import Update from './checkupdate'; // 引入上面的文件
+import dayjs from 'dayjs'
+import AdvancedFormat from 'dayjs/plugin/IsSameOrAfter'
 // import run from './utils/run'
 // import api from '@/lib/api'
 // require('@electron/remote/main').initialize()      // electron 10.0以下版本不兼容
 
+dayjs.extend(AdvancedFormat)
+// console.log(dayjs('2022-08-26').isSameOrAfter(dayjs(dayjs().format('YYYY-MM-DD'))))
+
 const fs = require('fs')
 const path = require('path')
 const puppeteer = require("puppeteer");
-const { parseExcel } = require('./utils')
 const http = require('http');
 const os = require("os");
 const Store = require('electron-store');
 const log = require('electron-log')
+const { intercept, patterns } = require('puppeteer-interceptor');
 
 log.transports.console.level = false;
 log.transports.console.level = 'silly';
@@ -26,7 +31,7 @@ log.transports.console.level = 'silly';
 // const isDev = require('electron-is-dev');
 
 const isDevelopment = process.env.NODE_ENV !== 'production'
-let win, browser, page, lastPage, excelPath, pageJumpCount = 0, searchCount = 1
+let win, browser, page, lastPage, pageJumpCount = 0
 
 // console.log(isDev)
 
@@ -40,6 +45,10 @@ store.set('users', [
 ])
 console.log(store.get('users'))
 global.browserPath = store.get('browserPath')
+global.orderData = []
+global.orderSubmitTime = ''
+global.taskTimerId = null
+global.balanceNum = 0
 
 const STORE_PATH = app.getPath('userData')
 console.log('用户目录', STORE_PATH)
@@ -272,6 +281,7 @@ let initPageAndLogin = async (page, event, ans) => {
   try {
     await page.goto("https://ip.jsipp.cn/");
     await page.waitForTimeout(1000)
+    await page.waitForSelector('.nav-login')
     const loginBtn = await page.$('.nav-login')
     await loginBtn.click() // 登录按钮
     // await browser.close()
@@ -280,7 +290,8 @@ let initPageAndLogin = async (page, event, ans) => {
     //   alert(1)
     // })
     await login(page, ans) // 弹框登录按钮
-    await page.waitForTimeout(1000)
+    // await page.waitForTimeout(1000)
+    await page.waitForNavigation({ waitUntil: 'networkidle2' })
     // run(page)
     // event.reply('log', '请手动滑动验证码，目前无法帮您自动完成')
   } catch (error) {
@@ -357,43 +368,8 @@ async function shot(page, imgSelector, type = "png", ifAddPrefix) {
   return result;
 }
 
-// electron 从渲染进程访问主进程除ipc外可以使用remote，从主进程渲染进程使用webContents. executeJavascript 在页面执行脚本，如果是puppeteer,page本身也提供访问页面元素的api
-
-async function postTask(event, ans) {
-  try {
-    // pageNavigation
-    // let page1 = await browser.newPage();
-    // await page1.goto('https://ip.jsipp.cn/ZSCQ/app/zscq.app/pages/patent.html')
-    // await page1.waitForNavigation({ waitUntil: 'load', timeout: 0 })
-    // await page.setRequestInterception(true)
-    // page.on('request', interceptedRequest => {
-    //   if (
-    //     interceptedRequest.url().endsWith('getSSOLoginUrl')
-    //   )
-    //     interceptedRequest.abort();
-    //   else interceptedRequest.continue();
-    // });
-
-    // 获取一个加密参数，目前看来是hardcode的
-    //let res = await api.post('https://ip.jsipp.cn/ZSCQ/app/zscq.app/action/ssoServer.action?method=getSSOLoginUrl')
-    if (!lastPage) {
-      win.webContents.send('log', '正在为您导航至最终页面，请自行填写表单信息')
-      let url1 = 'https://zlys.jsipp.cn/toPage/auth/getYS' + '?login_key=' + 'F5B3D8963940E757DCF57F636DD3039CF8979B8DE5EC056B0DD4B4DC87DCF9E1'
-      let url2 = 'https://zlys.jsipp.cn/auth/patent/general/toAppointmentPage?appId=yushen'
-      let page1 = await browser.newPage()
-      await page1.goto(url1)
-      let lastPage = await browser.newPage()
-      await lastPage.goto(url2)
-      global.lastPage = lastPage
-      await lastPage.waitForNavigation({ waitUntil: 'load', timeout: 0 })
-    }
-  } catch (error) {
-    console.log('出错了', error.message)
-    throw error
-  }
-}
-
 const loginCheck = async () => {
+  let page = global.page
   let res = await page.evaluate(() => {
    return document.querySelector('.navContent-loginUser') && document.querySelector('.navContent-loginUser').innerHTML
  })
@@ -404,13 +380,187 @@ const loginCheck = async () => {
 if (!isDevelopment) {
   Menu.setApplicationMenu(null)
 }
+// electron 从渲染进程访问主进程除ipc外可以使用remote，从主进程渲染进程使用webContents. executeJavascript 在页面执行脚本，如果是puppeteer,page本身也提供访问页面元素的api
 
+function validateForm() {
+  return new Promise(async (resolve, reject) => {
+    try {
+      let lastPage = global.lastPage
+      let res = await Promise.all([
+        lastPage.$eval('.layui-form .layui-form-item:nth-child(1) input[name="patentName"]', el => el.value),
+        lastPage.$eval('.layui-form .layui-form-item:nth-child(2) input[type="text"]', el => el.value),
+        lastPage.$eval('.layui-form .layui-form-item:nth-child(3) input[name="appointPhone"]', el => el.value),
+        lastPage.$eval('.layui-form .layui-form-item:nth-child(5) input', el => el.value),
+        lastPage.$eval('.layui-form .layui-form-item:nth-child(6) input[id="applyClassifyCode"]', el => el.value)
+        // lastPage.$eval('.layui-form .layui-form-item:nth-child(7) input[id="orderSubmitTime"]', el => el.value)
+      ])
+      let [caseNameValue, applyBodyValue, phoneValue, patentTypeValue, categoryNumberValue] = res
+      console.log(caseNameValue, applyBodyValue, phoneValue, patentTypeValue, categoryNumberValue)
+      if(caseNameValue && applyBodyValue && phoneValue && patentTypeValue && categoryNumberValue) {
+        resolve(1)
+      } else {
+        resolve(0)
+      }
+    } catch (error) {
+      reject(error)
+    }
+
+  })
+}
+function interceptOrderData() {
+  // {num: 0, typeCode: "1", balanceNum: 0, sendDay: "2022-08-01", usedNum: 0}
+  // post
+  // {"patentName":"5666","appId":"yushen","applyFieldId":"3887f4dbf7fe4097903ce8055ba24496","applyFieldCode":"2","applyFieldName":"新型功能和结构材料","applyCompanyId":"aba8a1af48dc423cb74b98ee2766ac31","appointPhone":"13951101409","typeCode":"1","applyClassifyCode":"C23F","orderSubmitTime":"2022-08-25","typeText":"发明","applyCompanyName":"江苏瑞耀纤维科技有限公司"}
+  let lastPage = global.lastPage
+  intercept(lastPage, patterns.XHR('*getCalendarMargin*'), {
+    onResponseReceived: event => {
+      let data = JSON.parse(event.response.body).data
+      if(global.balanceNum > 0) {
+        data.forEach(val => {
+          if(dayjs(val.sendDay).isSameOrAfter(dayjs(dayjs().format('YYYY-MM-DD')))) {
+            val.balanceNum = global.balanceNum
+          }
+        })
+      }
+      global.orderData = data
+      data.some(val => {
+        if(val.balanceNum > 0) {
+          global.orderSubmitTime = val.sendDay
+        }
+      })
+      console.log('hack中', global.orderSubmitTime)
+      let body = Object.assign({
+        msg: 'success',
+        code: 0,
+        success: true
+      }, { data })
+      let content = JSON.stringify(body)
+      event.response.body = content
+      // XXX:其他有地方没有resolve或reject导致处于pennding
+      return event.response
+    }
+  })
+
+}
+function setOrderTime() {
+  return new Promise(async (resolve, reject) => {
+    try {
+      let lastPage = global.lastPage
+      let orderSubmitTime = global.orderSubmitTime
+      // console.log('设置orderSubmitTime', orderSubmitTime, typeof orderSubmitTime)
+      if(orderSubmitTime) {
+        // lastPage.evaluate(() => {
+        //   document.querySelector('#orderSubmitTime').value = orderSubmitTime
+        // })
+        // lastPage.$eval('input[name=orderSubmitTime]', el => el.value = orderSubmitTime.toString())
+        await lastPage.focus('#orderSubmitTime')
+        await lastPage.keyboard.type(orderSubmitTime)
+        let submitBtn = await lastPage.$('#onSubmit')
+        win.webContents.send('log', '发现有余量可选，已为您提交，本次任务完成, 请为作者点颗小红心❤')
+        await submitBtn.click()
+        resolve(1)
+        return
+      } else {
+        await lastPage.waitForSelector('.layui-btn[onclick="cardNumber()"]', { visible: true })
+        let selectTimeButton = await lastPage.$('.layui-btn[onclick="cardNumber()"]')
+        // await selectTimeButton.click() // 点击是为了调用接口，重新拦截
+        await lastPage.evaluate((element) => {
+          element.click()
+        }, selectTimeButton)
+        await lastPage.waitForSelector('.layui-layer-btn1', { visible: true })
+        let closeTimeModalButton = await lastPage.$('.layui-layer-btn1')
+        await timeout(300)
+        // await closeTimeModalButton.click()
+        await lastPage.evaluate((element) => {
+          element.click()
+        }, closeTimeModalButton)
+        resolve(0)
+      }
+    } catch (error) {
+      win.webContents.send('log', '系统出了未知错误，请重新恢复执行')
+      reject(error)
+    }
+  })
+}
+async function postTask(event, ans) {
+  try {
+    // 获取一个加密参数，目前看来是hardcode的
+    //let res = await api.post('https://ip.jsipp.cn/ZSCQ/app/zscq.app/action/ssoServer.action?method=getSSOLoginUrl')
+    let url1 = 'https://zlys.jsipp.cn/toPage/auth/getYS' + '?login_key=' + 'F5B3D8963940E757DCF57F636DD3039CF8979B8DE5EC056B0DD4B4DC87DCF9E1'
+    let url2 = 'https://zlys.jsipp.cn/auth/patent/general/toAppointmentPage?appId=yushen'
+    let page1 = await browser.newPage()
+    await page1.goto(url1)
+    let lastPage = await browser.newPage()
+    await lastPage.goto(url2)
+    // 在这之前 error Execution context was destroyed, most likely because of a navigatio
+    win.webContents.send('log', '正在为您导航至最终页面，请自行填写除预约时间以外的表单信息，之后，本豆会开启定时任务自动为您提交，您可以做别的事去了')
+    lastPage.on('close', () => {
+      // win.webContents.send('closePage')
+      global.lastPage = null
+    })
+    global.lastPage = lastPage
+    await lastPage.waitForSelector('#onSubmit', { timeout: 3000 })
+
+    let checkRes = await interval(validateForm, 1000, 50000)
+    if(checkRes) {
+      // 要先点击按钮触发一次，否则此promise 出于pendding
+      interceptOrderData()    // 拦截一次就够了, 如果await 由于没有拦截时内部没有reolve或reject导致处于pendding
+      await lastPage.waitForSelector('.layui-btn[onclick="cardNumber()"]', { visible: true })
+      let selectTimeButton = await lastPage.$('.layui-btn[onclick="cardNumber()"]')
+      // await selectTimeButton.click() // 点击是为了调用接口，重新拦截
+      await lastPage.evaluate((element) => {
+        element.click()
+      }, selectTimeButton)
+      await lastPage.waitForSelector('.layui-layer-btn1', { visible: true })
+      let closeTimeModalButton = await lastPage.$('.layui-layer-btn1')
+      await timeout(500)
+      // await closeTimeModalButton.click()
+      await lastPage.evaluate((element) => {
+        element.click()
+      }, closeTimeModalButton)
+      await timeout(200)
+      // 重复查询预约时间，有则提交
+      interval(setOrderTime, 800, 0, function(timerId) {
+        global.taskTimerId = timerId
+      })
+    }
+
+  } catch (error) {
+    throw error
+  }
+}
+async function stopTask(event) {
+  if(global.taskTimerId) {
+    clearInterval(global.taskTimerId)
+    win.webContents.send('log', '任务已停止，可再次恢复启动')
+  }
+}
+async function restore(event) {
+  if(global.lastPage) {
+    interval(setOrderTime, 800, 0, function(timerId) {
+      global.taskTimerId = timerId
+    })
+  } else {
+    postTask()
+  }
+}
+async function debug(event) {
+  let lastPage = global.lastPage
+  await lastPage.waitForSelector('.layui-btn[onclick="cardNumber()"]', { visible: true })
+  let selectTimeButton = await lastPage.$('.layui-btn[onclick="cardNumber()"]')
+  await selectTimeButton.click() // 点击是为了调用接口，重新拦截
+  await lastPage.waitForSelector('.layui-layer-btn1', { visible: true })
+  let closeTimeModalButton = await lastPage.$('.layui-layer-btn1')
+  await timeout(300)
+  await closeTimeModalButton.click()
+}
 async function createWindow() {
   // Menu.setApplicationMenu()
   // Create the browser window.
   win = new BrowserWindow({
-    width: 860,
-    height: 750,
+    width: 770,
+    height: 600,
+    resizable: false,
     webPreferences: {
       // Use pluginOptions.nodeIntegration, leave this alone
       // See nklayman.github.io/vue-cli-plugin-electron-builder/guide/security.html#node-integration for more info
@@ -436,24 +586,26 @@ async function createWindow() {
   })
   ipcMain.on('start', async (event, ans) => {
     try {
-      // 没效果？
+      // 都有效果
+      event.sender.send('log', '正在为您初始化页面，将自动登录账号，但是需要自己拖动滑块')
       // win.webContents.send('log', '正在为您初始化页面，将自动登录账号，但是需要自己拖动滑块')
+      const { balanceNum } = ans
+      if(balanceNum) {
+        global.balanceNum = balanceNum
+      }
       await loadPage(event, ans)
       await initPageAndLogin(page, event, ans)
-      console.log('页面启动成功')
+      // 回应异步消息 event.sender.send
 
-      let checkRes = await interval(loginCheck, 1000, 20)
+      let checkRes = await interval(loginCheck, 1000, 30)
       if(checkRes) {
         await postTask(event, ans)
+        // 为啥没效果？是因为页面跳转了？waitForNavigation原因
+        // console.log('登录成功，正在导航中')
         // win.webContents.send('log', '登录成功，正在为您导航')
       } else {
         // win.webContents.send('log', '请滑动验证码')
       }
-      event.returnValue = {
-        code: 0,
-        message: '页面启动成功'
-      }
-      console.log(1111111111)
     } catch (error) {
       console.log('error', error.message)
       event.returnValue = error
@@ -483,13 +635,19 @@ async function createWindow() {
     global.browserPath = ans
     store.set('browserPath', ans)
   })
-  ipcMain.on('postTask', async (event, ans) => {
-    postTask(event, ans)
+  ipcMain.on('restore', async (event, ans) => {
+    restore(event, ans)
+  })
+  ipcMain.on('stopTask', async (event, ans) => {
+    stopTask(event, ans)
   })
   // 数据持久化
   ipcMain.on('setStore', (event, ans) => {
     const { key, value } = ans
     store.set(key, value)
+  })
+  ipcMain.on('debug', (event) => {
+    debug(event)
   })
 }
 
