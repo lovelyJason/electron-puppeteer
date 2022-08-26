@@ -20,6 +20,12 @@
   text-align: center;
   color: #2c3e50;
   height: 530px;
+  user-select: none;
+  -moz-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  // overflow-y: scroll;
 }
 
 #nav {

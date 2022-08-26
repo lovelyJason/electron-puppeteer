@@ -76,7 +76,7 @@ export default {
   }
   .bg {
     width: 100%;
-    height: calc(~"100% - 219px");
+    height: calc(~"100% - 220px");
     background: url('https://tva1.sinaimg.cn/large/0072Vf1pgy1foxkiztofjj31hc0u07g2.jpg') no-repeat center;
     background-size: cover;
   }

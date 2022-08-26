@@ -28,11 +28,11 @@
               </el-col>
             </el-row>
           </el-form-item>
-          <el-form-item class="text-left" label="是否篡改预约量">
+          <el-form-item class="text-left" label="是否篡改余额">
             <el-checkbox v-model="checked"></el-checkbox>
             <span style="margin-left: 12px;color: #f72525;;">谨慎！除非你知道做什么</span>
           </el-form-item>
-          <el-form-item class="text-left flex" label="余额">
+          <el-form-item v-if="checked" class="text-left flex" label="余额">
             <el-input v-model="balanceNum"></el-input>
           </el-form-item>
           <el-form-item class="text-left flex" label="频率">
@@ -243,7 +243,7 @@ export default {
     console.log('home mounted')
     setTimeout(() => {
       this.getUsers()
-    }, 0)
+    }, 100)
     ipcRenderer.on('log', (event, ans) => {
       this.logs.push(ans)
       console.log(this.logs)

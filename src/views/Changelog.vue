@@ -2,6 +2,24 @@
   <div class="changelog">
     <div class="met-log-body col-xl-9 pl-md-5">
       <ul class="met-log-list list-unstyled pl-md-5 ml-md-5">
+        <h2 class="d-inline-block my-2 pl-3 pl-md-0">2022</h2>
+          <li class="position-relative pl-3 pl-md-4 py-3 py-md-4">
+          <h3 class="h6 position-absolute text-muted">2022.8.26</h3>
+          <span
+            class="rounded-circle p-1 position-absolute bg-white text-center font-weight-bold"
+            >·</span
+          >
+          <dl class="mb-0">
+            <dt><h4 class="h5">豆豆启动神器(专属) 0.0.3 更新日志</h4></dt>
+            <dd class="card p-3 mb-0 mt-3 bg-light oya met-scrollbar">
+              <div class="met-editor font-size-14 text-muted">
+                <p>1.账号支持持久化存储；</p>
+                <p>2.修复执行频率过快时导致弹窗重复弹出未关闭；</p>
+                <p>3.修复其他一些问题；</p>
+              </div>
+            </dd>
+          </dl>
+        </li>
         <h2 class="d-inline-block my-2 pl-3 pl-md-0">2021</h2>
         <li class="position-relative pl-3 pl-md-4 py-3 py-md-4">
           <h3 class="h6 position-absolute text-muted">2021.2月某一天</h3>
@@ -66,7 +84,7 @@ ul, li, p, div, span,h1, h2, h3, h4, dl, dd, dt {
   text-align: center;
   height: calc(~"100% - 44px");
   .back-home {
-    position: absolute;
+    position: fixed;
     width: 70px;
     left: 0;
     right: 0;
@@ -74,6 +92,7 @@ ul, li, p, div, span,h1, h2, h3, h4, dl, dd, dt {
     bottom: 10px;
   }
   .met-log-body {
+    // overflow: scroll;
     -webkit-tap-highlight-color: transparent;
     font-size: 1rem;
     font-weight: 400;
