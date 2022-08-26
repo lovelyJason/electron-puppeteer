@@ -38,11 +38,10 @@ let win, browser, page, lastPage, pageJumpCount = 0
 
 const store = new Store();
 store.set('unicorn', '🦄');
-store.set('users', [
-  // { username: '566', password: ' 666*' },
-  // { username: '666', password: '666!' },
-])
-console.log(store.get('users'))
+// store.set('users', [
+//   // { username: '566', password: ' 666*' },
+//   // { username: '666', password: '666!' },
+// ])
 global.browserPath = store.get('browserPath')
 global.orderData = []
 global.orderSubmitTime = ''
@@ -599,9 +598,9 @@ async function createWindow() {
     win.loadURL('app://./index.html')
   }
   global.win = win
-  ipcMain.on('get-users', (event, ans) => {
+  ipcMain.handle('get-users', (event, ans) => {
     const users = store.get('users') || []
-    event.returnValue = users
+    return users
   })
   ipcMain.on('start', async (event, ans) => {
     try {
@@ -609,6 +608,9 @@ async function createWindow() {
       event.sender.send('log', '正在为您初始化页面，将自动登录账号，但是需要自己拖动滑块')
       // win.webContents.send('log', '正在为您初始化页面，将自动登录账号，但是需要自己拖动滑块')
       const { username, password, balanceNum, executionFrequency } = ans
+      store.set('users', [
+        { username, password }
+      ])
       store.set('users', [
         { username, password }
       ])

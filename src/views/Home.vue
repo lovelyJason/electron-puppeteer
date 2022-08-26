@@ -142,8 +142,9 @@ export default {
     }
   },
   methods: {
-    getUsers () {
-      const users = ipcRenderer.sendSync('get-users')
+    async getUsers () {
+      const users = await ipcRenderer.invoke('get-users')
+      console.log(users)
       if (users && users.length) {
         const user = users[0]
         this.username = user.username
@@ -236,10 +237,13 @@ export default {
     }
   },
   created () {
-    this.getUsers()
+    // this.getUsers()
   },
   mounted () {
     console.log('home mounted')
+    setTimeout(() => {
+      this.getUsers()
+    }, 0)
     ipcRenderer.on('log', (event, ans) => {
       this.logs.push(ans)
       console.log(this.logs)
