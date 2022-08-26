@@ -3,9 +3,8 @@
 import { app, protocol, BrowserWindow, ipcMain, dialog, Menu } from 'electron'
 import { createProtocol } from 'vue-cli-plugin-electron-builder/lib'
 // import installExtension, { VUEJS_DEVTOOLS } from 'electron-devtools-installer'
-import { login, getLoginVerify, getResponseBody } from './puppeteer/index.js'
-import { getRecognition } from './lib/lianzhong.js'
-import { insertDataFromExcel, interval, timeout } from './utils'
+import { login } from './puppeteer/index.js'
+import { interval, timeout } from './utils'
 import Update from './checkupdate'; // 引入上面的文件
 import dayjs from 'dayjs'
 import AdvancedFormat from 'dayjs/plugin/IsSameOrAfter'
@@ -49,6 +48,7 @@ global.orderData = []
 global.orderSubmitTime = ''
 global.taskTimerId = null
 global.balanceNum = 0
+global.executionFrequency = 500
 
 const STORE_PATH = app.getPath('userData')
 console.log('用户目录', STORE_PATH)
@@ -413,7 +413,9 @@ function interceptOrderData() {
   // {"patentName":"5666","appId":"yushen","applyFieldId":"3887f4dbf7fe4097903ce8055ba24496","applyFieldCode":"2","applyFieldName":"新型功能和结构材料","applyCompanyId":"aba8a1af48dc423cb74b98ee2766ac31","appointPhone":"13951101409","typeCode":"1","applyClassifyCode":"C23F","orderSubmitTime":"2022-08-25","typeText":"发明","applyCompanyName":"江苏瑞耀纤维科技有限公司"}
   let lastPage = global.lastPage
   intercept(lastPage, patterns.XHR('*getCalendarMargin*'), {
+    // 失败的canceled拦截不到
     onResponseReceived: event => {
+      console.log('event', event)
       let data = JSON.parse(event.response.body).data
       if(global.balanceNum > 0) {
         data.forEach(val => {
@@ -437,8 +439,11 @@ function interceptOrderData() {
       let content = JSON.stringify(body)
       event.response.body = content
       // XXX:其他有地方没有resolve或reject导致处于pennding
-      return event.response
+    },
+    // 失败的canceled拦截不到
+    onInterception: (event, obj) => {
     }
+
   })
 
 }
@@ -469,11 +474,18 @@ function setOrderTime() {
         }, selectTimeButton)
         await lastPage.waitForSelector('.layui-layer-btn1', { visible: true })
         let closeTimeModalButton = await lastPage.$('.layui-layer-btn1')
+        // let closeTimeModalIcon = await lastPage.$('.layui-layer-close1')
         await timeout(300)
+        // 貌似是请求过快会导致请求失败查不到数据从而弹框没有关闭
         // await closeTimeModalButton.click()
-        await lastPage.evaluate((element) => {
-          element.click()
-        }, closeTimeModalButton)
+        // await lastPage.evaluate((element) => {
+        //   element.click()
+        // }, closeTimeModalButton)
+        await lastPage.evaluate(() => {
+          Array.from(document.querySelectorAll('.layui-layer-close1')).forEach(item => {
+            item.click()
+          })
+        })
         resolve(0)
       }
     } catch (error) {
@@ -513,14 +525,14 @@ async function postTask(event, ans) {
       }, selectTimeButton)
       await lastPage.waitForSelector('.layui-layer-btn1', { visible: true })
       let closeTimeModalButton = await lastPage.$('.layui-layer-btn1')
-      await timeout(500)
+      await timeout(300)
       // await closeTimeModalButton.click()
       await lastPage.evaluate((element) => {
         element.click()
       }, closeTimeModalButton)
-      await timeout(200)
+      await timeout(500)
       // 重复查询预约时间，有则提交
-      interval(setOrderTime, 800, 0, function(timerId) {
+      interval(setOrderTime, global.executionFrequency || 800, 0, function(timerId) {
         global.taskTimerId = timerId
       })
     }
@@ -535,9 +547,16 @@ async function stopTask(event) {
     win.webContents.send('log', '任务已停止，可再次恢复启动')
   }
 }
-async function restore(event) {
+async function restore(event, ans) {
+  const { balanceNum, executionFrequency } = ans
+  if(balanceNum) {
+    global.balanceNum = balanceNum
+  }
+  if(executionFrequency) {
+    global.executionFrequency = executionFrequency
+  }
   if(global.lastPage) {
-    interval(setOrderTime, 800, 0, function(timerId) {
+    interval(setOrderTime, global.executionFrequency || 800, 0, function(timerId) {
       global.taskTimerId = timerId
     })
   } else {
@@ -559,7 +578,7 @@ async function createWindow() {
   // Create the browser window.
   win = new BrowserWindow({
     width: 770,
-    height: 600,
+    height: 630,
     resizable: false,
     webPreferences: {
       // Use pluginOptions.nodeIntegration, leave this alone
@@ -582,16 +601,22 @@ async function createWindow() {
   global.win = win
   ipcMain.on('get-users', (event, ans) => {
     const users = store.get('users') || []
-    event.reply('get-users-success', users)
+    event.returnValue = users
   })
   ipcMain.on('start', async (event, ans) => {
     try {
       // 都有效果
       event.sender.send('log', '正在为您初始化页面，将自动登录账号，但是需要自己拖动滑块')
       // win.webContents.send('log', '正在为您初始化页面，将自动登录账号，但是需要自己拖动滑块')
-      const { balanceNum } = ans
+      const { username, password, balanceNum, executionFrequency } = ans
+      store.set('users', [
+        { username, password }
+      ])
       if(balanceNum) {
         global.balanceNum = balanceNum
+      }
+      if(executionFrequency) {
+        global.executionFrequency = executionFrequency
       }
       await loadPage(event, ans)
       await initPageAndLogin(page, event, ans)

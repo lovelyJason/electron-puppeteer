@@ -35,6 +35,10 @@
           <el-form-item class="text-left flex" label="余额">
             <el-input v-model="balanceNum"></el-input>
           </el-form-item>
+          <el-form-item class="text-left flex" label="频率">
+            <el-input v-model="executionFrequency"></el-input>
+            <span style="margin-left: 10px;">毫秒</span>
+          </el-form-item>
         </el-form>
       </div>
       <div class="btns-wrapper">
@@ -112,8 +116,8 @@ export default {
       }),
       state: '',
       users: [],
-      username: 'yxsj236103',
-      password: 'yxsj123456',
+      username: '',
+      password: '',
       options: [{ value: 0, label: '666' }],
       openBowser: false,
       loadBrowser: false,
@@ -128,7 +132,8 @@ export default {
       recordSearchSuccess: false,
       logs: [],
       checked: false,
-      balanceNum: 500
+      balanceNum: 500,
+      executionFrequency: 500
     }
   },
   computed: {
@@ -138,7 +143,12 @@ export default {
   },
   methods: {
     getUsers () {
-      ipcRenderer.send('get-users')
+      const users = ipcRenderer.sendSync('get-users')
+      if (users && users.length) {
+        const user = users[0]
+        this.username = user.username
+        this.password = user.password
+      }
     },
     querySearch (queryString, cb) {
       const users = this.users
@@ -193,7 +203,8 @@ export default {
       }
       const options = {
         username: this.username,
-        password: this.password
+        password: this.password,
+        executionFrequency: Number.parseInt(this.executionFrequency)
       }
       if (this.checked) {
         options.balanceNum = this.balanceNum
@@ -216,7 +227,9 @@ export default {
         type: 'success',
         message: '准备好了,双手离开键盘'
       })
-      ipcRenderer.send('restore')
+      ipcRenderer.send('restore', {
+        executionFrequency: Number.parseInt(this.executionFrequency)
+      })
     },
     jump () {
       this.$router.push('/path')
@@ -274,9 +287,16 @@ export default {
       }
       .el-form-item {
         margin-bottom: 8px;
+        .el-form-item__content {
+          display: flex;
+        }
 
         &.flex {
           display: flex;
+          height: 40px;
+          .el-input {
+            width: 120px;
+          }
         }
         &.text-left {
           text-align: left;
