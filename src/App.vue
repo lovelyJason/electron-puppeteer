@@ -19,7 +19,7 @@
   -moz-osx-font-smoothing: grayscale;
   text-align: center;
   color: #2c3e50;
-  height: 530px;
+  height: 700px;
   user-select: none;
   -moz-user-select: none;
   -webkit-touch-callout: none;

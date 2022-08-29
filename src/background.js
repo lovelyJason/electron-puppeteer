@@ -8,6 +8,8 @@ import { interval, timeout } from './utils'
 import Update from './checkupdate'; // 引入上面的文件
 import dayjs from 'dayjs'
 import AdvancedFormat from 'dayjs/plugin/IsSameOrAfter'
+import axios from 'axios'
+// import { resolve } from 'path'
 // import run from './utils/run'
 // import api from '@/lib/api'
 // require('@electron/remote/main').initialize()      // electron 10.0以下版本不兼容
@@ -31,6 +33,7 @@ log.transports.console.level = 'silly';
 
 const isDevelopment = process.env.NODE_ENV !== 'production'
 let win, browser, page, lastPage, pageJumpCount = 0
+let submit_cookie = ''
 
 // console.log(isDev)
 
@@ -68,6 +71,59 @@ function checkOperatingSystem(type) {
 const osType = checkOperatingSystem(os.type())
 
 console.log(osType)
+
+function formatCookies(cookies) {
+  let list = []
+  cookies.forEach(val => {
+    list.push(`${val.name}=${val.value}`)
+  })
+  return list.join('; ')
+}
+function submitForm(formData) {
+  let data = formData
+  var config = {
+    method: 'post',
+    url: 'https://zlys.jsipp.cn/auth/patent/general/appoint/general',
+    headers: {
+      'sec-ch-ua': '"Chromium";v="104", " Not A;Brand";v="99", "Google Chrome";v="104"',
+      'sec-ch-ua-mobile': '?0',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.5112.102 Safari/537.36',
+      'Content-Type': 'application/json',
+      'Accept': 'application/json, text/javascript, */*; q=0.01',
+      'Referer': 'https://zlys.jsipp.cn/auth/patent/general/toAppointmentPage?appId=yushen',
+      'X-Requested-With': 'XMLHttpRequest',
+      'sec-ch-ua-platform': '"Windows"',
+      'token_2': 'token_2_2',
+      'Cookie': submit_cookie
+    },
+    data: data
+  };
+  return new Promise((resolve, reject) => {
+    axios(config)
+     .then(function (response) {
+       //  {"msg":"请选择预约日期!!","code":-1,"success":false}
+       console.log('提交结果', JSON.stringify(response.data));
+       win.webContents.send('log', JSON.stringify(response.data))
+       const { code, msg } = response.data
+       if(code == 0) {
+        resolve(1)
+       } else {
+         reject({
+            ...response.data,
+            message: msg
+         })
+       }
+     })
+     .catch(function (error) {
+       console.log('提交错误', error);
+       win.webContents.send('log', JSON.stringify(error))
+       reject(error)
+     });
+
+  })
+
+}
+
 
 // 图片有防盗,直接请求不了,需要传入cookie,且浏览器如果刷新了这个图片,cookie也会更新
 function getImgBase64Data(url) {
@@ -157,7 +213,6 @@ function getChromiumExecPath(event) {
 
 // start puppeteer
 async function loadPage(event, ans) {
-  console.log("start up");
   let chromeExecPath = await getChromiumExecPath(event)
   try {
     browser = await puppeteer.launch({
@@ -384,6 +439,7 @@ if (!isDevelopment) {
 function validateForm() {
   return new Promise(async (resolve, reject) => {
     try {
+      console.log('校验表单中')
       let lastPage = global.lastPage
       let res = await Promise.all([
         lastPage.$eval('.layui-form .layui-form-item:nth-child(1) input[name="patentName"]', el => el.value),
@@ -393,14 +449,39 @@ function validateForm() {
         lastPage.$eval('.layui-form .layui-form-item:nth-child(6) input[id="applyClassifyCode"]', el => el.value)
         // lastPage.$eval('.layui-form .layui-form-item:nth-child(7) input[id="orderSubmitTime"]', el => el.value)
       ])
-      let [caseNameValue, applyBodyValue, phoneValue, patentTypeValue, categoryNumberValue] = res
-      console.log(caseNameValue, applyBodyValue, phoneValue, patentTypeValue, categoryNumberValue)
-      if(caseNameValue && applyBodyValue && phoneValue && patentTypeValue && categoryNumberValue) {
+      let [patentName, applyCompanyId, appointPhone, typeCode, applyClassifyCode] = res
+      if(patentName) {
+        win.webContents.send('get-form', {
+          patentName
+        })
+      }
+      if(applyCompanyId) {
+        win.webContents.send('get-form', {
+          applyCompanyId
+        })
+      }
+      if(appointPhone) {
+        win.webContents.send('get-form', {
+          appointPhone
+        })
+      }
+      if(typeCode) {
+        win.webContents.send('get-form', {
+          typeCode
+        })
+      }
+      if(applyClassifyCode) {
+        win.webContents.send('get-form', {
+          applyClassifyCode
+        })
+      }
+      if(patentName && applyCompanyId && appointPhone && typeCode && applyClassifyCode) {
         resolve(1)
       } else {
         resolve(0)
       }
     } catch (error) {
+      win.webContents.send('log', '出错了' + error.message)
       reject(error)
     }
 
@@ -414,7 +495,6 @@ function interceptOrderData() {
   intercept(lastPage, patterns.XHR('*getCalendarMargin*'), {
     // 失败的canceled拦截不到
     onResponseReceived: event => {
-      console.log('event', event)
       let data = JSON.parse(event.response.body).data
       if(global.balanceNum > 0) {
         data.forEach(val => {
@@ -427,6 +507,7 @@ function interceptOrderData() {
       data.some(val => {
         if(val.balanceNum > 0) {
           global.orderSubmitTime = val.sendDay
+          return true
         }
       })
       console.log('hack中', global.orderSubmitTime)
@@ -437,6 +518,7 @@ function interceptOrderData() {
       }, { data })
       let content = JSON.stringify(body)
       event.response.body = content
+      return event.response
       // XXX:其他有地方没有resolve或reject导致处于pennding
     },
     // 失败的canceled拦截不到
@@ -488,7 +570,7 @@ function setOrderTime() {
         resolve(0)
       }
     } catch (error) {
-      win.webContents.send('log', '系统出了未知错误，请重新恢复执行')
+      win.webContents.send('log', '系统出错了，请重新恢复执行' + error.message)
       reject(error)
     }
   })
@@ -510,6 +592,15 @@ async function postTask(event, ans) {
       global.lastPage = null
     })
     global.lastPage = lastPage
+    let cookies = await lastPage.cookies()
+    submit_cookie = formatCookies(cookies)
+    // store.set('cookies', cookies)
+    // 回填数据
+    const appointPhone = await lastPage.$eval('.layui-form .layui-form-item:nth-child(3) input[name="appointPhone"]', el => el.value)
+    win.webContents.send('get-form', {
+      appointPhone
+    })
+    win.webContents.send('log', 'cookies抓取成功：' + JSON.stringify(cookies))
     await lastPage.waitForSelector('#onSubmit', { timeout: 3000 })
 
     let checkRes = await interval(validateForm, 1000, 50000)
@@ -540,7 +631,7 @@ async function postTask(event, ans) {
     throw error
   }
 }
-async function stopTask(event) {
+async function stopTask() {
   if(global.taskTimerId) {
     clearInterval(global.taskTimerId)
     win.webContents.send('log', '任务已停止，可再次恢复启动')
@@ -576,8 +667,8 @@ async function createWindow() {
   // Menu.setApplicationMenu()
   // Create the browser window.
   win = new BrowserWindow({
-    width: 770,
-    height: 630,
+    width: 780,
+    height: 780,
     resizable: false,
     webPreferences: {
       // Use pluginOptions.nodeIntegration, leave this alone
@@ -601,6 +692,22 @@ async function createWindow() {
   ipcMain.handle('get-users', (event, ans) => {
     const users = store.get('users') || []
     return users
+  })
+  ipcMain.on('submit', async (event, ans) => {
+    try {
+      const { executionFrequency } = ans
+      if(executionFrequency) {
+        global.executionFrequency = executionFrequency
+      }
+      delete ans.executionFrequency
+      interval(() => {
+        return submitForm(ans)
+      }, global.executionFrequency || 800, 0, function(timerId) {
+        global.taskTimerId = timerId
+      })
+    } catch (error) {
+      event.returnValue = error
+    }
   })
   ipcMain.on('start', async (event, ans) => {
     try {
@@ -630,6 +737,10 @@ async function createWindow() {
         // 为啥没效果？是因为页面跳转了？waitForNavigation原因
         // console.log('登录成功，正在导航中')
         // win.webContents.send('log', '登录成功，正在为您导航')
+        let appointPhone = '13951101409'
+        win.webContents.send('get-form', {
+          appointPhone
+        })
       } else {
         // win.webContents.send('log', '请滑动验证码')
       }
@@ -666,7 +777,7 @@ async function createWindow() {
     restore(event, ans)
   })
   ipcMain.on('stopTask', async (event, ans) => {
-    stopTask(event, ans)
+    stopTask()
   })
   // 数据持久化
   ipcMain.on('setStore', (event, ans) => {
