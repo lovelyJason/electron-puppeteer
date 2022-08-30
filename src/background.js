@@ -97,26 +97,24 @@ function submitForm(formData) {
       'Cookie': submit_cookie
     },
     data: data
-  };
+  }
+  console.log(data)
   return new Promise((resolve, reject) => {
     axios(config)
      .then(function (response) {
        //  {"msg":"请选择预约日期!!","code":-1,"success":false}
        console.log('提交结果', JSON.stringify(response.data));
-       win.webContents.send('log', JSON.stringify(response.data))
+       win.webContents.send('log', dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data))
        const { code, msg } = response.data
        if(code == 0) {
         resolve(1)
        } else {
-         reject({
-            ...response.data,
-            message: msg
-         })
+         reject(new Error(dayjs().format('HH:mm:ss') + '：' + msg))
        }
      })
      .catch(function (error) {
        console.log('提交错误', error);
-       win.webContents.send('log', JSON.stringify(error))
+       win.webContents.send('log', dayjs().format('HH:mm:ss') + '：' + error.message)
        reject(error)
      });
 
@@ -733,14 +731,14 @@ async function createWindow() {
 
       let checkRes = await interval(loginCheck, 1000, 30)
       if(checkRes) {
-        await postTask(event, ans)
-        // 为啥没效果？是因为页面跳转了？waitForNavigation原因
-        // console.log('登录成功，正在导航中')
-        // win.webContents.send('log', '登录成功，正在为您导航')
         let appointPhone = '13951101409'
         win.webContents.send('get-form', {
           appointPhone
         })
+        await postTask(event, ans)
+        // 为啥没效果？是因为页面跳转了？waitForNavigation原因
+        // console.log('登录成功，正在导航中')
+        // win.webContents.send('log', '登录成功，正在为您导航')
       } else {
         // win.webContents.send('log', '请滑动验证码')
       }

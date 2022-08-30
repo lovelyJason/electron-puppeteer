@@ -22,7 +22,9 @@ import {
   Dialog,
   Progress,
   Message,
-  MessageBox
+  MessageBox,
+  Tabs,
+  TabPane
 } from 'element-ui'
 import UmyUi from 'umy-ui'
 import 'umy-ui/lib/theme-chalk/index.css'
@@ -48,6 +50,8 @@ Vue.use(Autocomplete)
 Vue.use(Dialog)
 Vue.use(Progress)
 Vue.use(UmyUi)
+Vue.use(Tabs)
+Vue.use(TabPane)
 
 Vue.prototype.$message = Message
 Vue.prototype.$loading = Loading.service
