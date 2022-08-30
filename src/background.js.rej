@@ -1,0 +1,15 @@
+diff a/src/background.js b/src/background.js	(rejected hunks)
+@@ -668,11 +668,11 @@
+       }
+       await loadPage(event, ans)
+       await initPageAndLogin(page, event, ans)
+-      // 回应异步消息 event.sender.send
+ 
++      // 回应异步消息 event.sender.send
+       let checkRes = await interval(loginCheck, 1000, 30)
+       if(checkRes) {
+-        await postTask(event, ans)
++        await postTask()
+         // 为啥没效果？是因为页面跳转了？waitForNavigation原因
+         // console.log('登录成功，正在导航中')
+         // win.webContents.send('log', '登录成功，正在为您导航')
