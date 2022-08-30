@@ -107,13 +107,17 @@ function submitForm(formData) {
        win.webContents.send('log', dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data))
        const { code, msg } = response.data
        if(code == 0) {
-        resolve(1)
+          win.webContents.send('message', JSON.stringify(response.data))
+          resolve(1)
+          clearInterval(global.taskTimerId)
        } else {
-         reject(new Error(dayjs().format('HH:mm:ss') + '：' + msg))
+          resolve(0)
+          // reject(new Error(dayjs().format('HH:mm:ss') + '：' + msg))
        }
      })
      .catch(function (error) {
-       console.log('提交错误', error);
+       console.log('提交错误', error.message);
+       clearInterval(global.taskTimerId)
        win.webContents.send('log', dayjs().format('HH:mm:ss') + '：' + error.message)
        reject(error)
      });

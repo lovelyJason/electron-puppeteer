@@ -378,6 +378,12 @@ export default {
       this.openBowser = false
       this.startText = '一键启动'
     })
+    ipcRenderer.on('message', (event, ans) => {
+      this.$message({
+        type: 'success',
+        message: ans
+      })
+    })
     ipcRenderer.on('pageJump', (event, ans) => {
       const { pageJumpCount, url } = ans
       this.pageJumpCount = pageJumpCount
