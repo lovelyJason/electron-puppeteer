@@ -82,11 +82,11 @@ const interval = function (p, delay, limit, cb) {
   return new Promise((resolve, reject) => {
     const timerId = setInterval(async () => {
       try {
+        count++
         // console.log('开启定时任务')
         if (typeof cb === 'function') {
-          cb(timerId)
+          cb(timerId, count)
         }
-        count++
         const res = await p()
         if (res) {
           // 执行结果如果达到效果，可以清除定时器
@@ -96,7 +96,8 @@ const interval = function (p, delay, limit, cb) {
         }
         if (count >= limit && limit !== 0) {
           clearInterval(timerId)
-          reject(new Error('超出调用限制'))
+          // reject(new Error('超出调用限制'))
+          resolve(0)
           return
         }
       } catch (e) {

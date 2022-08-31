@@ -1,7 +1,7 @@
 <template>
   <div id="app">
     <div id="nav">
-      <span>豆豆启动神器</span>
+      <span>科佑新创扫号助手</span>
       <!-- | -->
       <!-- <router-link to="/about">About</router-link> -->
     </div>
@@ -17,9 +17,8 @@
   font-family: Avenir, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  text-align: center;
   color: #2c3e50;
-  height: 700px;
+  height: 680px;
   user-select: none;
   -moz-user-select: none;
   -webkit-touch-callout: none;

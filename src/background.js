@@ -1,6 +1,6 @@
 'use strict'
 
-import { app, protocol, BrowserWindow, ipcMain, dialog, Menu } from 'electron'
+import { app, protocol, BrowserWindow, ipcMain, dialog, Menu, shell } from 'electron'
 import { createProtocol } from 'vue-cli-plugin-electron-builder/lib'
 // import installExtension, { VUEJS_DEVTOOLS } from 'electron-devtools-installer'
 import { login } from './puppeteer/index.js'
@@ -34,6 +34,9 @@ log.transports.console.level = 'silly';
 const isDevelopment = process.env.NODE_ENV !== 'production'
 let win, browser, page, lastPage, pageJumpCount = 0
 let submit_cookie = ''
+let executionParams = {}
+let executionCount = 0
+let executionSuccessCount = 0
 
 // console.log(isDev)
 
@@ -54,6 +57,16 @@ global.executionFrequency = 500
 
 const STORE_PATH = app.getPath('userData')
 console.log('用户目录', STORE_PATH)
+global.CONFIG_PATH = STORE_PATH + '/' + 'config.json'
+
+
+// log.error('Hello, log error');
+// log.warn('Hello, log warn');
+// log.info('Hello, log info');
+// log.verbose('Hello, log verbose');
+// log.debug('Hello, log debug');
+// log.silly('Hello, log silly');
+// log.info('中文');
 
 function checkOperatingSystem(type) {
   switch (type) {
@@ -98,22 +111,25 @@ function submitForm(formData) {
     },
     data: data
   }
-  console.log(data)
+  // console.log(data)
   return new Promise((resolve, reject) => {
     axios(config)
      .then(function (response) {
        //  {"msg":"请选择预约日期!!","code":-1,"success":false}
-       console.log('提交结果', JSON.stringify(response.data));
-       win.webContents.send('log', dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data))
+       log.info('接口调用成功', JSON.stringify(response.data));
+       win.webContents.send('log', '第' + executionCount + '次执行：' + dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data))
        const { code, msg } = response.data
-       if(code == 0) {
+       if(code == 0) {  // 提交成功
+        executionSuccessCount++
+        win.webContents.send('message', dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data))
+        clearInterval(global.taskTimerId)
         resolve(1)
-       } else {
-         reject(new Error(dayjs().format('HH:mm:ss') + '：' + msg))
+       } else { // 提交失败，如余额不足
+         resolve(0)
        }
      })
      .catch(function (error) {
-       console.log('提交错误', error);
+       log.error('接口调用错误', error.message);  // 404，504， 如果回应时间较长，可能长时间没有回应，但是定时器执行多次
        win.webContents.send('log', dayjs().format('HH:mm:ss') + '：' + error.message)
        reject(error)
      });
@@ -325,7 +341,6 @@ async function loadPage(event, ans) {
     });
     // event.reply('log', '启动成功------来自主进程，正在自动填写账号密码')
   } catch (error) {
-    console.log(error.message)
     throw error;      // throw error不要同时和webContents.send同时存在,否则重复报错
   }
 }
@@ -437,7 +452,6 @@ if (!isDevelopment) {
 function validateForm() {
   return new Promise(async (resolve, reject) => {
     try {
-      console.log('校验表单中')
       let lastPage = global.lastPage
       let res = await Promise.all([
         lastPage.$eval('.layui-form .layui-form-item:nth-child(1) input[name="patentName"]', el => el.value),
@@ -448,31 +462,31 @@ function validateForm() {
         // lastPage.$eval('.layui-form .layui-form-item:nth-child(7) input[id="orderSubmitTime"]', el => el.value)
       ])
       let [patentName, applyCompanyId, appointPhone, typeCode, applyClassifyCode] = res
-      if(patentName) {
-        win.webContents.send('get-form', {
-          patentName
-        })
-      }
-      if(applyCompanyId) {
-        win.webContents.send('get-form', {
-          applyCompanyId
-        })
-      }
-      if(appointPhone) {
-        win.webContents.send('get-form', {
-          appointPhone
-        })
-      }
-      if(typeCode) {
-        win.webContents.send('get-form', {
-          typeCode
-        })
-      }
-      if(applyClassifyCode) {
-        win.webContents.send('get-form', {
-          applyClassifyCode
-        })
-      }
+      // if(patentName) {
+      //   win.webContents.send('get-form', {
+      //     patentName
+      //   })
+      // }
+      // if(applyCompanyId) {
+      //   win.webContents.send('get-form', {
+      //     applyCompanyId
+      //   })
+      // }
+      // if(appointPhone) {
+      //   win.webContents.send('get-form', {
+      //     appointPhone
+      //   })
+      // }
+      // if(typeCode) {
+      //   win.webContents.send('get-form', {
+      //     typeCode
+      //   })
+      // }
+      // if(applyClassifyCode) {
+      //   win.webContents.send('get-form', {
+      //     applyClassifyCode
+      //   })
+      // }
       if(patentName && applyCompanyId && appointPhone && typeCode && applyClassifyCode) {
         resolve(1)
       } else {
@@ -508,7 +522,6 @@ function interceptOrderData() {
           return true
         }
       })
-      console.log('hack中', global.orderSubmitTime)
       let body = Object.assign({
         msg: 'success',
         code: 0,
@@ -594,11 +607,8 @@ async function postTask(event, ans) {
     submit_cookie = formatCookies(cookies)
     // store.set('cookies', cookies)
     // 回填数据
-    const appointPhone = await lastPage.$eval('.layui-form .layui-form-item:nth-child(3) input[name="appointPhone"]', el => el.value)
-    win.webContents.send('get-form', {
-      appointPhone
-    })
-    win.webContents.send('log', 'cookies抓取成功：' + JSON.stringify(cookies))
+
+    // win.webContents.send('log', 'cookies抓取成功：' + JSON.stringify(cookies))
     await lastPage.waitForSelector('#onSubmit', { timeout: 3000 })
 
     let checkRes = await interval(validateForm, 1000, 50000)
@@ -666,7 +676,7 @@ async function createWindow() {
   // Create the browser window.
   win = new BrowserWindow({
     width: 780,
-    height: 780,
+    height: 760,
     resizable: false,
     webPreferences: {
       // Use pluginOptions.nodeIntegration, leave this alone
@@ -691,20 +701,42 @@ async function createWindow() {
     const users = store.get('users') || []
     return users
   })
-  ipcMain.on('submit', async (event, ans) => {
+  ipcMain.handle('open-config', (event, ans) => {
+    shell.openPath(global.CONFIG_PATH)
+    return true
+  })
+  ipcMain.handle('delete-case', (event, ans) => {
+    let index = ans
+    let caseList = store.get('caseList')
+    caseList.splice(index, 1)
+    store.set('caseList', caseList)
+    return true
+  })
+  ipcMain.handle('get-form', (event, ans) => {
+    const caseList = store.get('caseList') || []
+    return caseList
+  })
+  ipcMain.handle('set-execution-params', (event, ans) => {
+    executionParams = ans
+    return true
+  })
+  ipcMain.handle('submit', async (event, ans) => {
     try {
-      const { executionFrequency } = ans
-      if(executionFrequency) {
-        global.executionFrequency = executionFrequency
-      }
-      delete ans.executionFrequency
-      interval(() => {
+      win.webContents.send('log', '任务执行中，请耐心等待......')
+      let res = await interval(() => {
         return submitForm(ans)
-      }, global.executionFrequency || 800, 0, function(timerId) {
+      }, executionParams.executionFrequency || 800, executionParams.limit, function(timerId, count) {
         global.taskTimerId = timerId
+        executionCount = count
       })
+      log.info(`本次任务${executionParams.limit}条，成功数量：${executionSuccessCount}，失败数量：${executionParams.limit - executionSuccessCount}`)
+      if(res) {
+        return { code: 0, msg: '本次任务操作成功' }
+      } else {
+        return { code: -1, msg: '超出调用限制' }
+      }
     } catch (error) {
-      event.returnValue = error
+      return error
     }
   })
   ipcMain.on('start', async (event, ans) => {
@@ -731,10 +763,10 @@ async function createWindow() {
 
       let checkRes = await interval(loginCheck, 1000, 30)
       if(checkRes) {
-        let appointPhone = '13951101409'
-        win.webContents.send('get-form', {
-          appointPhone
-        })
+        // let appointPhone = '13951101409'
+        // win.webContents.send('get-form', {
+        //   appointPhone
+        // })
         await postTask(event, ans)
         // 为啥没效果？是因为页面跳转了？waitForNavigation原因
         // console.log('登录成功，正在导航中')
@@ -743,7 +775,7 @@ async function createWindow() {
         // win.webContents.send('log', '请滑动验证码')
       }
     } catch (error) {
-      console.log('error', error.message)
+      log.error('error', error.message)
       event.returnValue = error
     }
 
@@ -770,6 +802,10 @@ async function createWindow() {
     console.log('用户修改的path', ans)
     global.browserPath = ans
     store.set('browserPath', ans)
+  })
+  ipcMain.on('setData', (event, ans) => {
+    const { key, value } = ans
+    store.set(key, value)
   })
   ipcMain.on('restore', async (event, ans) => {
     restore(event, ans)
@@ -835,7 +871,6 @@ if (isDevelopment) {
 process.on('unhandledRejection', (reason, promise) => {
   const { code } = reason
   if (code === -100) return
-  console.log('Unhandled Rejection:', reason)
-  log.error(reason.message || '系统异常')
+  log.error('Unhandled Rejection:', reason.message || '系统异常')
   win.webContents.send('errorHandle', reason)
 })

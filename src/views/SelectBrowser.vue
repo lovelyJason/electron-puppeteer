@@ -61,6 +61,7 @@ export default {
 
 <style lang="less" scoped>
   .select-browser {
+    text-align: center;
     height: calc(~"100% - 88px");
     position: relative;
   }

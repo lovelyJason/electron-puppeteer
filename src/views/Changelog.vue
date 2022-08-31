@@ -10,7 +10,7 @@
             >·</span
           >
           <dl class="mb-0">
-            <dt><h4 class="h5">豆豆启动神器(专属) 0.0.3 更新日志</h4></dt>
+            <dt><h4 class="h5">科佑新创扫号助手(专属) 0.0.3 更新日志</h4></dt>
             <dd class="card p-3 mb-0 mt-3 bg-light oya met-scrollbar">
               <div class="met-editor font-size-14 text-muted">
                 <p>1.账号支持持久化存储；</p>
@@ -28,7 +28,7 @@
             >·</span
           >
           <dl class="mb-0">
-            <dt><h4 class="h5">豆豆启动神器(专属) 0.0.2 更新日志</h4></dt>
+            <dt><h4 class="h5">科佑新创扫号助手(专属) 0.0.2 更新日志</h4></dt>
             <dd class="card p-3 mb-0 mt-3 bg-light oya met-scrollbar">
               <div class="met-editor font-size-14 text-muted">
                 <p>1.自动拉取版本更新；</p>
@@ -45,7 +45,7 @@
             >·</span
           >
           <dl class="mb-0">
-            <dt><h4 class="h5">豆豆启动神器(专属) 0.0.1 更新日志</h4></dt>
+            <dt><h4 class="h5">科佑新创扫号助手(专属) 0.0.1 更新日志</h4></dt>
             <dd class="card p-3 mb-0 mt-3 bg-light oya met-scrollbar">
               <div class="met-editor font-size-14 text-muted">
                 <p>1.基本完成任务自动化；</p>
