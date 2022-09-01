@@ -63,6 +63,13 @@
                   >
                     停止浏览器
                   </el-button>
+                  <el-button
+                    v-if="isDev"
+                    type="primary"
+                    @click="destroySoft"
+                  >
+                    销毁
+                  </el-button>
                 </div>
               </el-form>
             </div>
@@ -323,6 +330,9 @@ export default {
     }
   },
   methods: {
+    destroySoft () {
+      ipcRenderer.invoke('destroy')
+    },
     async deleteCase (index) {
       await ipcRenderer.invoke('delete-case', index)
       this.getCaseList()
@@ -544,9 +554,10 @@ export default {
       })
     })
     ipcRenderer.on('message', (event, ans) => {
+      const { type, message } = ans
       this.$message({
-        type: 'success',
-        message: ans
+        type,
+        message
       })
     })
   },

@@ -9,6 +9,7 @@ import Update from './checkupdate'; // 引入上面的文件
 import dayjs from 'dayjs'
 import AdvancedFormat from 'dayjs/plugin/IsSameOrAfter'
 import axios from 'axios'
+import { setTimeout } from 'core-js'
 // import { resolve } from 'path'
 // import run from './utils/run'
 // import api from '@/lib/api'
@@ -18,12 +19,12 @@ dayjs.extend(AdvancedFormat)
 // console.log(dayjs('2022-08-26').isSameOrAfter(dayjs(dayjs().format('YYYY-MM-DD'))))
 
 const fs = require('fs')
-const path = require('path')
 const puppeteer = require("puppeteer");
 const http = require('http');
 const os = require("os");
 const Store = require('electron-store');
 const log = require('electron-log')
+const path = require('path')
 const { intercept, patterns } = require('puppeteer-interceptor');
 
 log.transports.console.level = false;
@@ -37,6 +38,7 @@ let submit_cookie = ''
 let executionParams = {}
 let executionCount = 0
 let executionSuccessCount = 0
+const accept_ip_list = ['210.21.226.100', '121.231.26.20', '183.213.133.139']
 
 // console.log(isDev)
 
@@ -68,6 +70,18 @@ global.CONFIG_PATH = STORE_PATH + '/' + 'config.json'
 // log.silly('Hello, log silly');
 // log.info('中文');
 
+const osType = checkOperatingSystem(os.type())
+
+console.log(osType)
+
+function formatCookies(cookies) {
+  let list = []
+  cookies.forEach(val => {
+    list.push(`${val.name}=${val.value}`)
+  })
+  return list.join('; ')
+}
+
 function checkOperatingSystem(type) {
   switch (type) {
     case "Windows_NT":
@@ -80,18 +94,40 @@ function checkOperatingSystem(type) {
       return "windows";
   }
 }
-
-const osType = checkOperatingSystem(os.type())
-
-console.log(osType)
-
-function formatCookies(cookies) {
-  let list = []
-  cookies.forEach(val => {
-    list.push(`${val.name}=${val.value}`)
-  })
-  return list.join('; ')
+function getLocalAreaNetworkIPAdress() {
+  var interfaces = os.networkInterfaces();
+  for (var devName in interfaces) {
+      var iface = interfaces[devName];
+      for (var i = 0; i < iface.length; i++) {
+          var alias = iface[i];
+          if (alias.family === 'IPv4' && alias.address !== '127.0.0.1' && !alias.internal) {
+              return alias.address;
+          }
+      }
+  }
 }
+async function getOuterNetIPAdress() {
+  let url = 'https://ifconfig.me/ip'
+  return axios.get(url).then(res => {
+    let ip = res.data
+    return ip
+  })
+}
+
+function getUserInfo() {
+  let url = 'http://www.qdovo.com/api/patent/user'
+  return axios.get(url).then(res => {
+    return res.data
+  })
+}
+function diableUser() {
+  let url = 'http://www.qdovo.com/api/patent/user/disable'
+  return axios.post(url).then(res => {
+    return res.data
+  })
+}
+
+
 function submitForm(formData) {
   let data = formData
   var config = {
@@ -121,7 +157,10 @@ function submitForm(formData) {
        const { code, msg } = response.data
        if(code == 0) {  // 提交成功
         executionSuccessCount++
-        win.webContents.send('message', dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data))
+        win.webContents.send('message', {
+          type: 'success',
+          message: dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data)
+        })
         clearInterval(global.taskTimerId)
         resolve(1)
        } else { // 提交失败，如余额不足
@@ -597,7 +636,7 @@ async function postTask(event, ans) {
     let lastPage = await browser.newPage()
     await lastPage.goto(url2)
     // 在这之前 error Execution context was destroyed, most likely because of a navigatio
-    win.webContents.send('log', '正在为您导航至最终页面，请自行填写除预约时间以外的表单信息，之后，本豆会开启定时任务自动为您提交，您可以做别的事去了')
+    win.webContents.send('log', '正在为您导航至最终页面，请自行填写除预约时间以外的表单信息，之后，本程序会开启定时任务自动为您提交；同时，您也可在本客户端直接开始提交，速度会更快')
     lastPage.on('close', () => {
       // win.webContents.send('closePage')
       global.lastPage = null
@@ -671,13 +710,24 @@ async function debug(event) {
   await timeout(300)
   await closeTimeModalButton.click()
 }
+// console.log(path.join(__static,"./"))  // D:\projects\electron-puppeteer\public\
 async function createWindow() {
   // Menu.setApplicationMenu()
   // Create the browser window.
+  let self_ip = await getOuterNetIPAdress()
+  let user_status = await getUserInfo()
+  if(!accept_ip_list.includes(self_ip) || user_status == '0') {
+    new BrowserWindow({
+      width: 200,
+      height: 200
+    })
+    return
+  }
   win = new BrowserWindow({
     width: 780,
     height: 760,
     resizable: false,
+    icon: path.join(__static, "./icon64.ico"),
     webPreferences: {
       // Use pluginOptions.nodeIntegration, leave this alone
       // See nklayman.github.io/vue-cli-plugin-electron-builder/guide/security.html#node-integration for more info
@@ -687,6 +737,7 @@ async function createWindow() {
   })
   // 注册更新检查
   Update(win, log);
+
   if (process.env.WEBPACK_DEV_SERVER_URL) {     // http://localhost:8080/
     // Load the url of the dev server if in development mode
     await win.loadURL(process.env.WEBPACK_DEV_SERVER_URL)
@@ -712,6 +763,10 @@ async function createWindow() {
     store.set('caseList', caseList)
     return true
   })
+  ipcMain.handle('destroy', (event, ans) => {
+    diableUser()
+    return true
+  })
   ipcMain.handle('get-form', (event, ans) => {
     const caseList = store.get('caseList') || []
     return caseList
@@ -722,6 +777,17 @@ async function createWindow() {
   })
   ipcMain.handle('submit', async (event, ans) => {
     try {
+      let user_status = await getUserInfo()
+      if(user_status == '0') {
+        win.webContents.send('message', {
+          type: 'error',
+          message: '未经授权，请联系作者'
+        })
+        setTimeout(() => {
+          app.quit()
+        }, 2000)
+        return
+      }
       win.webContents.send('log', '任务执行中，请耐心等待......')
       let res = await interval(() => {
         return submitForm(ans)

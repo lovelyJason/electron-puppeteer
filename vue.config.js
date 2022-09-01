@@ -32,7 +32,15 @@ module.exports = {
         copyright: 'Copyright © 2021 jasonhuang',
         nsis: {
           oneClick: false,
-          allowToChangeInstallationDirectory: true
+          allowToChangeInstallationDirectory: true,
+          createDesktopShortcut: true
+          // installerIcon: "./build/icons/shortcut.ico",
+          // uninstallerIcon: "./build/icons/shortcut.ico",
+          // installerHeaderIcon: "./build/icons/shortcut.ico",
+          // shortcutName: 'shortcut.ico'
+        },
+        win: {
+          // icon: "./build/icons/shortcut.ico"
         }
       },
       publish: {
