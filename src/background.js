@@ -754,7 +754,7 @@ async function postTask(event, ans) {
 
       // 不如直接手输日期，等待倒计时提交
       let submitBtn = await lastPage.$('#onSubmit')
-      let job = schedule.scheduleJob('59 42 * * * *', async function () {
+      let job = schedule.scheduleJob('59 10 * * * *', async function () {
         let count = 1
         let timerId = setInterval(() => {
           if(count >= 5) {
