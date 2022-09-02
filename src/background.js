@@ -10,6 +10,7 @@ import dayjs from 'dayjs'
 import AdvancedFormat from 'dayjs/plugin/IsSameOrAfter'
 import axios from 'axios'
 import { setTimeout } from 'core-js'
+import { join } from 'path'
 // import { resolve } from 'path'
 // import run from './utils/run'
 // import api from '@/lib/api'
@@ -26,6 +27,7 @@ const Store = require('electron-store');
 const log = require('electron-log')
 const path = require('path')
 const { intercept, patterns } = require('puppeteer-interceptor');
+const schedule = require("node-schedule");
 
 log.transports.console.level = false;
 log.transports.console.level = 'silly';
@@ -36,9 +38,18 @@ const isDevelopment = process.env.NODE_ENV !== 'production'
 let win, browser, page, lastPage, pageJumpCount = 0
 let submit_cookie = ''
 let executionParams = {}
-let executionCount = 0
+let curExecutionCount = 1 // 当前执行的次序
 let executionSuccessCount = 0
 const accept_ip_list = ['210.21.226.100', '121.231.26.20', '183.213.133.139']
+let user_status = null
+let formDataList = []
+let stopTaskFlag = false
+
+// let rule = new schedule.RecurrenceRule();
+// 毫秒无效， 当秒间隔时间加上当前时间大于60的时候不会生效
+// let job = schedule.scheduleJob('59/0.3 * * * * *', async function () {
+//   console.log(dayjs().format('HH:mm:ss'))
+// })
 
 // console.log(isDev)
 
@@ -59,6 +70,7 @@ global.executionFrequency = 500
 
 const STORE_PATH = app.getPath('userData')
 console.log('用户目录', STORE_PATH)
+global.STORE_PATH = STORE_PATH
 global.CONFIG_PATH = STORE_PATH + '/' + 'config.json'
 
 
@@ -127,10 +139,10 @@ function diableUser() {
   })
 }
 
-
-function submitForm(formData) {
-  let data = formData
-  var config = {
+async function submitFormSerially() {
+  if(stopTaskFlag) return
+  let data = formDataList[0]
+  let config = {
     method: 'post',
     url: 'https://zlys.jsipp.cn/auth/patent/general/appoint/general',
     headers: {
@@ -147,31 +159,98 @@ function submitForm(formData) {
     },
     data: data
   }
-  // console.log(data)
+  // config = {
+  //   method: 'get',
+  //   url: 'http://localhost:3000/api/test'
+  // }
+  formDataList.push(formDataList.shift())
+  return axios(config).then(async response => {
+    log.info('接口调用成功', JSON.stringify(response.data));
+    const { code, } = response.data
+    if(code === 0) {
+      win.webContents.send('message', {
+        type: 'success',
+        message: '恭喜您，预约成功 --- ' + dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data)
+      })
+      win.webContents.send('log', '第' + curExecutionCount + '次执行：' + dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data) + '预约成功，即刻终止任务')
+      curExecutionCount = 1
+      executionSuccessCount = 0
+    } else {
+      if(curExecutionCount > executionParams.limit) {
+        log.info(`本次任务${executionParams.limit}条，成功数量：${executionSuccessCount}，失败数量：${executionParams.limit - executionSuccessCount}`)
+        curExecutionCount = 1
+        executionSuccessCount = 0
+        return
+      }
+      win.webContents.send('log', '第' + curExecutionCount + '次执行：' + dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data) + '------未预约成功，重新尝试中......')
+      curExecutionCount++
+
+      await submitFormSerially()
+    }
+
+  }).catch(error => {
+    log.error('接口调用错误', error.message);  // 404，504， 如果回应时间较长，可能长时间没有回应，但是定时器执行多次
+    win.webContents.send('log', dayjs().format('HH:mm:ss') + '：' + error.message)
+    throw error
+  })
+}
+
+function submitForm() {
+  let data = formDataList[0]
+  let config = {
+    method: 'post',
+    url: 'https://zlys.jsipp.cn/auth/patent/general/appoint/general',
+    headers: {
+      'sec-ch-ua': '"Chromium";v="104", " Not A;Brand";v="99", "Google Chrome";v="104"',
+      'sec-ch-ua-mobile': '?0',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.5112.102 Safari/537.36',
+      'Content-Type': 'application/json',
+      'Accept': 'application/json, text/javascript, */*; q=0.01',
+      'Referer': 'https://zlys.jsipp.cn/auth/patent/general/toAppointmentPage?appId=yushen',
+      'X-Requested-With': 'XMLHttpRequest',
+      'sec-ch-ua-platform': '"Windows"',
+      'token_2': 'token_2_2',
+      'Cookie': submit_cookie
+    },
+    data: data
+  }
+  console.log('本次请求对象', data)
+  formDataList.push(formDataList.shift())
+  // test
+  // return new Promise((resolve, reject) => {
+  //   setTimeout(() => {
+  //     win.webContents.send('log', '第' + curExecutionCount + '次执行：' + dayjs().format('HH:mm:ss') + '：' + data.patentName)
+  //     resolve(0)
+  //   }, 200);
+  // })
   return new Promise((resolve, reject) => {
     axios(config)
      .then(function (response) {
        //  {"msg":"请选择预约日期!!","code":-1,"success":false}
        log.info('接口调用成功', JSON.stringify(response.data));
-       win.webContents.send('log', '第' + executionCount + '次执行：' + dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data))
+       win.webContents.send('log', '第' + curExecutionCount + '次执行：' + dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data))
        const { code, msg } = response.data
        if(code == 0) {  // 提交成功
         executionSuccessCount++
         win.webContents.send('message', {
           type: 'success',
-          message: dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data)
+          message: '恭喜您，预约成功 --- ' + dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data)
         })
         clearInterval(global.taskTimerId)
         resolve(1)
        } else { // 提交失败，如余额不足
          resolve(0)
        }
-     })
-     .catch(function (error) {
+
+     }).catch(function (error) {
        log.error('接口调用错误', error.message);  // 404，504， 如果回应时间较长，可能长时间没有回应，但是定时器执行多次
        win.webContents.send('log', dayjs().format('HH:mm:ss') + '：' + error.message)
        reject(error)
-     });
+     }).finally(() => {
+        if(curExecutionCount === executionParams.limit) {
+          log.info(`本次任务${executionParams.limit}条，成功数量：${executionSuccessCount}，失败数量：${executionParams.limit - executionSuccessCount}`)
+        }
+     })
 
   })
 
@@ -497,8 +576,8 @@ function validateForm() {
         lastPage.$eval('.layui-form .layui-form-item:nth-child(2) input[type="text"]', el => el.value),
         lastPage.$eval('.layui-form .layui-form-item:nth-child(3) input[name="appointPhone"]', el => el.value),
         lastPage.$eval('.layui-form .layui-form-item:nth-child(5) input', el => el.value),
-        lastPage.$eval('.layui-form .layui-form-item:nth-child(6) input[id="applyClassifyCode"]', el => el.value)
-        // lastPage.$eval('.layui-form .layui-form-item:nth-child(7) input[id="orderSubmitTime"]', el => el.value)
+        lastPage.$eval('.layui-form .layui-form-item:nth-child(6) input[id="applyClassifyCode"]', el => el.value),
+        lastPage.$eval('.layui-form .layui-form-item:nth-child(7) input[id="orderSubmitTime"]', el => el.value)
       ])
       let [patentName, applyCompanyId, appointPhone, typeCode, applyClassifyCode] = res
       // if(patentName) {
@@ -650,27 +729,41 @@ async function postTask(event, ans) {
     // win.webContents.send('log', 'cookies抓取成功：' + JSON.stringify(cookies))
     await lastPage.waitForSelector('#onSubmit', { timeout: 3000 })
 
-    let checkRes = await interval(validateForm, 1000, 50000)
+    let checkRes = await interval(validateForm, 30000, 50000)
     if(checkRes) {
       // 要先点击按钮触发一次，否则此promise 出于pendding
-      interceptOrderData()    // 拦截一次就够了, 如果await 由于没有拦截时内部没有reolve或reject导致处于pendding
-      await lastPage.waitForSelector('.layui-btn[onclick="cardNumber()"]', { visible: true })
-      let selectTimeButton = await lastPage.$('.layui-btn[onclick="cardNumber()"]')
-      // await selectTimeButton.click() // 点击是为了调用接口，重新拦截
-      await lastPage.evaluate((element) => {
-        element.click()
-      }, selectTimeButton)
-      await lastPage.waitForSelector('.layui-layer-btn1', { visible: true })
-      let closeTimeModalButton = await lastPage.$('.layui-layer-btn1')
-      await timeout(300)
-      // await closeTimeModalButton.click()
-      await lastPage.evaluate((element) => {
-        element.click()
-      }, closeTimeModalButton)
-      await timeout(500)
-      // 重复查询预约时间，有则提交
-      interval(setOrderTime, global.executionFrequency || 800, 0, function(timerId) {
-        global.taskTimerId = timerId
+      // interceptOrderData()    // 拦截一次就够了, 如果await 由于没有拦截时内部没有reolve或reject导致处于pendding
+      // await lastPage.waitForSelector('.layui-btn[onclick="cardNumber()"]', { visible: true })
+      // let selectTimeButton = await lastPage.$('.layui-btn[onclick="cardNumber()"]')
+      // // await selectTimeButton.click() // 点击是为了调用接口，重新拦截
+      // await lastPage.evaluate((element) => {
+      //   element.click()
+      // }, selectTimeButton)
+      // await lastPage.waitForSelector('.layui-layer-btn1', { visible: true })
+      // let closeTimeModalButton = await lastPage.$('.layui-layer-btn1')
+      // await timeout(300)
+      // // await closeTimeModalButton.click()
+      // await lastPage.evaluate((element) => {
+      //   element.click()
+      // }, closeTimeModalButton)
+      // await timeout(500)
+      // // 重复查询预约时间，有则提交
+      // interval(setOrderTime, global.executionFrequency || 800, 0, function(timerId) {
+      //   global.taskTimerId = timerId
+      // })
+
+      // 不如直接手输日期，等待倒计时提交
+      let submitBtn = await lastPage.$('#onSubmit')
+      let job = schedule.scheduleJob('59 42 * * * *', async function () {
+        let count = 1
+        let timerId = setInterval(() => {
+          if(count >= 5) {
+            clearInterval(timerId)
+            job.cancel()
+          }
+          count++
+          submitBtn.click()
+        }, 300)
       })
     }
 
@@ -679,10 +772,14 @@ async function postTask(event, ans) {
   }
 }
 async function stopTask() {
-  if(global.taskTimerId) {
-    clearInterval(global.taskTimerId)
-    win.webContents.send('log', '任务已停止，可再次恢复启动')
+  if(executionParams.model === 1) {
+    stopTaskFlag = true
+  } else if(executionParams.model === 2) {
+    if(global.taskTimerId) {
+      clearInterval(global.taskTimerId)
+    }
   }
+  win.webContents.send('log', '任务已停止，可再次恢复启动')
 }
 async function restore(event, ans) {
   const { balanceNum, executionFrequency } = ans
@@ -715,7 +812,7 @@ async function createWindow() {
   // Menu.setApplicationMenu()
   // Create the browser window.
   let self_ip = await getOuterNetIPAdress()
-  let user_status = await getUserInfo()
+  user_status = await getUserInfo()
   if(!accept_ip_list.includes(self_ip) || user_status == '0') {
     new BrowserWindow({
       width: 200,
@@ -776,8 +873,9 @@ async function createWindow() {
     return true
   })
   ipcMain.handle('submit', async (event, ans) => {
+    stopTaskFlag = false
+    formDataList = ans
     try {
-      let user_status = await getUserInfo()
       if(user_status == '0') {
         win.webContents.send('message', {
           type: 'error',
@@ -789,17 +887,22 @@ async function createWindow() {
         return
       }
       win.webContents.send('log', '任务执行中，请耐心等待......')
-      let res = await interval(() => {
-        return submitForm(ans)
-      }, executionParams.executionFrequency || 800, executionParams.limit, function(timerId, count) {
-        global.taskTimerId = timerId
-        executionCount = count
-      })
-      log.info(`本次任务${executionParams.limit}条，成功数量：${executionSuccessCount}，失败数量：${executionParams.limit - executionSuccessCount}`)
-      if(res) {
-        return { code: 0, msg: '本次任务操作成功' }
+      // 并行执行
+      if(executionParams.model === 2) {
+        let res = await interval(() => {
+          return submitForm()
+        }, executionParams.executionFrequency || 800, executionParams.limit, function(timerId, count) {
+          global.taskTimerId = timerId
+          curExecutionCount = count
+        })
+        if(res) {
+          return { code: 0, msg: '本次任务操作完成' }
+        } else {
+          return { code: -1, msg: '超出调用次数限制，本次任务完成' }
+        }
       } else {
-        return { code: -1, msg: '超出调用限制' }
+        await submitFormSerially()
+        return { code: 0, msg: '本次任务操作完成' }
       }
     } catch (error) {
       return error
