@@ -40,7 +40,7 @@ let submit_cookie = ''
 let executionParams = {}
 let curExecutionCount = 1 // 当前执行的次序
 let executionSuccessCount = 0
-const accept_ip_list = ['210.21.226.100', '121.231.26.20', '183.213.133.139']
+const accept_ip_list = ['210.21.226.100', '121.231.26.20', '183.213.133.139', '113.99.149.165']
 let user_status = null
 let formDataList = []
 let stopTaskFlag = false
@@ -754,7 +754,7 @@ async function postTask(event, ans) {
 
       // 不如直接手输日期，等待倒计时提交
       let submitBtn = await lastPage.$('#onSubmit')
-      let job = schedule.scheduleJob('59 10 * * * *', async function () {
+      let job = schedule.scheduleJob('59 59 10 * * *', async function () {
         let count = 1
         let timerId = setInterval(() => {
           if(count >= 5) {
