@@ -9,8 +9,6 @@ import Update from './checkupdate'; // 引入上面的文件
 import dayjs from 'dayjs'
 import AdvancedFormat from 'dayjs/plugin/IsSameOrAfter'
 import axios from 'axios'
-import { setTimeout } from 'core-js'
-import { join } from 'path'
 // import { resolve } from 'path'
 // import run from './utils/run'
 // import api from '@/lib/api'
@@ -19,6 +17,8 @@ import { join } from 'path'
 dayjs.extend(AdvancedFormat)
 // console.log(dayjs('2022-08-26').isSameOrAfter(dayjs(dayjs().format('YYYY-MM-DD'))))
 
+const https = require('https');
+const { machineIdSync } = require('node-machine-id');
 const fs = require('fs')
 const puppeteer = require("puppeteer");
 const http = require('http');
@@ -31,19 +31,32 @@ const schedule = require("node-schedule");
 
 log.transports.console.level = false;
 log.transports.console.level = 'silly';
+axios.defaults.headers['Connection'] = 'keep-alive'
+
+const instance = axios.create({
+  httpsAgent: new https.Agent({
+    rejectUnauthorized: false
+  })
+});
 
 // const isDev = require('electron-is-dev');
 
 const isDevelopment = process.env.NODE_ENV !== 'production'
 let win, browser, page, lastPage, pageJumpCount = 0
 let submit_cookie = ''
-let executionParams = {}
+let executionParams = {
+  executionFrequency: 500,
+  limit: 5,
+  model: 2
+}
 let curExecutionCount = 1 // 当前执行的次序
 let executionSuccessCount = 0
 const accept_ip_list = ['210.21.226.100', '121.231.26.20', '183.213.133.139', '113.99.149.165']
 let user_status = null
 let formDataList = []
 let stopTaskFlag = false
+let webPageTimerId = null
+let inProgress = false
 
 // let rule = new schedule.RecurrenceRule();
 // 毫秒无效， 当秒间隔时间加上当前时间大于60的时候不会生效
@@ -72,7 +85,7 @@ const STORE_PATH = app.getPath('userData')
 console.log('用户目录', STORE_PATH)
 global.STORE_PATH = STORE_PATH
 global.CONFIG_PATH = STORE_PATH + '/' + 'config.json'
-
+global.machineId = machineIdSync()    // e40c2e6224c173ffb4a8b332c49d4527cbd91e3b1d0f56c22b71dd1627d4f31d
 
 // log.error('Hello, log error');
 // log.warn('Hello, log warn');
@@ -141,7 +154,9 @@ function diableUser() {
 
 async function submitFormSerially() {
   if(stopTaskFlag) return
+  inProgress = true
   let data = formDataList[0]
+
   let config = {
     method: 'post',
     url: 'https://zlys.jsipp.cn/auth/patent/general/appoint/general',
@@ -155,16 +170,17 @@ async function submitFormSerially() {
       'X-Requested-With': 'XMLHttpRequest',
       'sec-ch-ua-platform': '"Windows"',
       'token_2': 'token_2_2',
-      'Cookie': submit_cookie
+      'Cookie': (global.browser && global.lastPage) ? submit_cookie : store.get('cookies')
     },
     data: data
   }
+  // TODO:
   // config = {
   //   method: 'get',
-  //   url: 'http://localhost:3000/api/test'
+  //   url: 'http://localhost:3000/api/test1'
   // }
   formDataList.push(formDataList.shift())
-  return axios(config).then(async response => {
+  return instance(config).then(async response => {
     log.info('接口调用成功', JSON.stringify(response.data));
     const { code, } = response.data
     if(code === 0) {
@@ -175,11 +191,13 @@ async function submitFormSerially() {
       win.webContents.send('log', '第' + curExecutionCount + '次执行：' + dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data) + '预约成功，即刻终止任务')
       curExecutionCount = 1
       executionSuccessCount = 0
+      inProgress = false
     } else {
       if(curExecutionCount > executionParams.limit) {
         log.info(`本次任务${executionParams.limit}条，成功数量：${executionSuccessCount}，失败数量：${executionParams.limit - executionSuccessCount}`)
         curExecutionCount = 1
         executionSuccessCount = 0
+        inProgress = false
         return
       }
       win.webContents.send('log', '第' + curExecutionCount + '次执行：' + dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data) + '------未预约成功，重新尝试中......')
@@ -188,14 +206,20 @@ async function submitFormSerially() {
       await submitFormSerially()
     }
 
-  }).catch(error => {
+  }).catch(async error => {
     log.error('接口调用错误', error.message);  // 404，504， 如果回应时间较长，可能长时间没有回应，但是定时器执行多次
     win.webContents.send('log', dayjs().format('HH:mm:ss') + '：' + error.message)
-    throw error
+    if(error.message.includes('404')) {
+      inProgress = false
+      throw error   // 抛错会导致省局报错没后续了
+    } else {
+      await submitFormSerially()
+    }
   })
 }
 
 function submitForm() {
+  inProgress = true
   let data = formDataList[0]
   let config = {
     method: 'post',
@@ -210,28 +234,27 @@ function submitForm() {
       'X-Requested-With': 'XMLHttpRequest',
       'sec-ch-ua-platform': '"Windows"',
       'token_2': 'token_2_2',
-      'Cookie': submit_cookie
+      'Cookie': (global.browser && global.lastPage) ? submit_cookie : store.get('cookies')
     },
     data: data
   }
-  console.log('本次请求对象', data)
+  // TODO:
+  // config = {
+  //   method: 'get',
+  //   url: 'http://localhost:3000/api/test1'
+  // }
   formDataList.push(formDataList.shift())
-  // test
-  // return new Promise((resolve, reject) => {
-  //   setTimeout(() => {
-  //     win.webContents.send('log', '第' + curExecutionCount + '次执行：' + dayjs().format('HH:mm:ss') + '：' + data.patentName)
-  //     resolve(0)
-  //   }, 200);
-  // })
+  console.log(dayjs().format('HH:mm:ss'))
   return new Promise((resolve, reject) => {
-    axios(config)
+    instance(config)
      .then(function (response) {
        //  {"msg":"请选择预约日期!!","code":-1,"success":false}
        log.info('接口调用成功', JSON.stringify(response.data));
        win.webContents.send('log', '第' + curExecutionCount + '次执行：' + dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data))
-       const { code, msg } = response.data
+       const { code } = response.data
+       executionSuccessCount++
        if(code == 0) {  // 提交成功
-        executionSuccessCount++
+        inProgress = false
         win.webContents.send('message', {
           type: 'success',
           message: '恭喜您，预约成功 --- ' + dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data)
@@ -243,11 +266,15 @@ function submitForm() {
        }
 
      }).catch(function (error) {
-       log.error('接口调用错误', error.message);  // 404，504， 如果回应时间较长，可能长时间没有回应，但是定时器执行多次
-       win.webContents.send('log', dayjs().format('HH:mm:ss') + '：' + error.message)
-       reject(error)
+        log.error('接口调用错误', error.message);  // 404，504， 如果回应时间较长，可能长时间没有回应，但是定时器执行多次
+        win.webContents.send('log', dayjs().format('HH:mm:ss') + '：' + error.message)
+        if(error.message.includes('404')) {
+          inProgress = false
+          reject(error)
+        }
      }).finally(() => {
         if(curExecutionCount === executionParams.limit) {
+          inProgress = false
           log.info(`本次任务${executionParams.limit}条，成功数量：${executionSuccessCount}，失败数量：${executionParams.limit - executionSuccessCount}`)
         }
      })
@@ -653,7 +680,19 @@ function interceptOrderData() {
     // 失败的canceled拦截不到
     onInterception: (event, obj) => {
     }
-
+  })
+  intercept(lastPage, patterns.XHR('*general'), {
+    onResponseReceived: event => {
+    let lastPage = global.lastPage
+      let data = JSON.parse(event.response.body).data
+      log.info('提交预约的接口返回值：', data)
+      let { code } = data
+      if(code === 0) {
+        clearInterval(webPageTimerId)
+        lastPage.close()
+      }
+      return event.response
+    }
   })
 
 }
@@ -712,6 +751,7 @@ async function postTask(event, ans) {
     let url2 = 'https://zlys.jsipp.cn/auth/patent/general/toAppointmentPage?appId=yushen'
     let page1 = await browser.newPage()
     await page1.goto(url1)
+    console.log(await page1.$('#main-message'))
     let lastPage = await browser.newPage()
     await lastPage.goto(url2)
     // 在这之前 error Execution context was destroyed, most likely because of a navigatio
@@ -723,16 +763,18 @@ async function postTask(event, ans) {
     global.lastPage = lastPage
     let cookies = await lastPage.cookies()
     submit_cookie = formatCookies(cookies)
+    store.set('cookies', submit_cookie)
+    win.webContents.send('setCookies', submit_cookie)
     // store.set('cookies', cookies)
     // 回填数据
 
     // win.webContents.send('log', 'cookies抓取成功：' + JSON.stringify(cookies))
     await lastPage.waitForSelector('#onSubmit', { timeout: 3000 })
 
-    let checkRes = await interval(validateForm, 30000, 50000)
+    let checkRes = await interval(validateForm, 20000, 50000)
     if(checkRes) {
       // 要先点击按钮触发一次，否则此promise 出于pendding
-      // interceptOrderData()    // 拦截一次就够了, 如果await 由于没有拦截时内部没有reolve或reject导致处于pendding
+      interceptOrderData()    // 拦截一次就够了, 如果await 由于没有拦截时内部没有reolve或reject导致处于pendding
       // await lastPage.waitForSelector('.layui-btn[onclick="cardNumber()"]', { visible: true })
       // let selectTimeButton = await lastPage.$('.layui-btn[onclick="cardNumber()"]')
       // // await selectTimeButton.click() // 点击是为了调用接口，重新拦截
@@ -756,9 +798,9 @@ async function postTask(event, ans) {
       let submitBtn = await lastPage.$('#onSubmit')
       let job = schedule.scheduleJob('59 59 10 * * *', async function () {
         let count = 1
-        let timerId = setInterval(() => {
+        webPageTimerId = setInterval(() => {
           if(count >= 5) {
-            clearInterval(timerId)
+            clearInterval(webPageTimerId)
             job.cancel()
           }
           count++
@@ -772,9 +814,9 @@ async function postTask(event, ans) {
   }
 }
 async function stopTask() {
-  if(executionParams.model === 1) {
-    stopTaskFlag = true
-  } else if(executionParams.model === 2) {
+  stopTaskFlag = true
+  inProgress = false
+  if(executionParams.model === 2) {
     if(global.taskTimerId) {
       clearInterval(global.taskTimerId)
     }
@@ -807,19 +849,28 @@ async function debug(event) {
   await timeout(300)
   await closeTimeModalButton.click()
 }
+ipcMain.handle('getData', (event, ans) => {
+  let list = []
+  ans = ans || []
+  ans.forEach(val => {
+    list.push(store.get(val))
+  })
+  return list
+})
 // console.log(path.join(__static,"./"))  // D:\projects\electron-puppeteer\public\
 async function createWindow() {
   // Menu.setApplicationMenu()
   // Create the browser window.
-  let self_ip = await getOuterNetIPAdress()
-  user_status = await getUserInfo()
-  if(!accept_ip_list.includes(self_ip) || user_status == '0') {
-    new BrowserWindow({
-      width: 200,
-      height: 200
-    })
-    return
-  }
+  // let self_ip = await getOuterNetIPAdress()
+  // user_status = await getUserInfo()
+  // console.log(self_ip, user_status)
+  // if(!accept_ip_list.includes(self_ip) || user_status == '0') {
+  //   new BrowserWindow({
+  //     width: 200,
+  //     height: 200
+  //   })
+  //   return
+  // }
   win = new BrowserWindow({
     width: 780,
     height: 760,
@@ -845,9 +896,14 @@ async function createWindow() {
     win.loadURL('app://./index.html')
   }
   global.win = win
-  ipcMain.handle('get-users', (event, ans) => {
-    const users = store.get('users') || []
-    return users
+
+  win.webContents.send('setCookies', store.get('cookies'))
+  ipcMain.handle('setData', (event, ans) => {
+    ans.forEach(val => {
+      const { key, value } = val
+      store.set(key, value)
+    })
+    return 'success'
   })
   ipcMain.handle('open-config', (event, ans) => {
     shell.openPath(global.CONFIG_PATH)
@@ -864,17 +920,20 @@ async function createWindow() {
     diableUser()
     return true
   })
-  ipcMain.handle('get-form', (event, ans) => {
-    const caseList = store.get('caseList') || []
-    return caseList
-  })
   ipcMain.handle('set-execution-params', (event, ans) => {
     executionParams = ans
     return true
   })
+  // 开始提交任务
   ipcMain.handle('submit', async (event, ans) => {
+    if(inProgress) {
+      win.webContents.send('log', '已经有任务在进行了，请勿重复操作......')
+      return
+    }
     stopTaskFlag = false
     formDataList = ans
+    curExecutionCount = 1
+    executionSuccessCount = 0
     try {
       if(user_status == '0') {
         win.webContents.send('message', {
@@ -888,7 +947,8 @@ async function createWindow() {
       }
       win.webContents.send('log', '任务执行中，请耐心等待......')
       // 并行执行
-      if(executionParams.model === 2) {
+      console.log('model:', executionParams.model)
+      if(executionParams.model === 2 || !executionParams.model) {
         let res = await interval(() => {
           return submitForm()
         }, executionParams.executionFrequency || 800, executionParams.limit, function(timerId, count) {
@@ -911,7 +971,7 @@ async function createWindow() {
   ipcMain.on('start', async (event, ans) => {
     try {
       // 都有效果
-      event.sender.send('log', '正在为您初始化页面，将自动登录账号，但是需要自己拖动滑块')
+      event.sender.send('log', '正在为您初始化页面，将自动登录账号，但是需要自己拖动滑块；如果出错了没有打开最终预约页面，需要自己导入cookies，教程：http://cdn.qdovo.com/doudou.gif')
       // win.webContents.send('log', '正在为您初始化页面，将自动登录账号，但是需要自己拖动滑块')
       const { username, password, balanceNum, executionFrequency } = ans
       store.set('users', [
@@ -971,10 +1031,6 @@ async function createWindow() {
     console.log('用户修改的path', ans)
     global.browserPath = ans
     store.set('browserPath', ans)
-  })
-  ipcMain.on('setData', (event, ans) => {
-    const { key, value } = ans
-    store.set(key, value)
   })
   ipcMain.on('restore', async (event, ans) => {
     restore(event, ans)

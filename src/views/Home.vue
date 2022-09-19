@@ -11,7 +11,7 @@
         <div style="display: flex;">
           <div class="left">
             <div class="section">
-              <span>选择账号</span>
+              <span>选择账号(导入cookie可以不用启动浏览器)</span>
               <el-form ref="form" >
                 <el-form-item>
                   <el-row>
@@ -31,22 +31,28 @@
                     </el-col>
                   </el-row>
                 </el-form-item>
-                <el-form-item class="text-left" label="是否篡改余额">
+                <!-- <el-form-item class="text-left" label="是否篡改余额">
                   <el-checkbox v-model="checked"></el-checkbox>
-                  <span style="margin-left: 12px;color: #f72525;;">谨慎！除非你知道做什么</span>
-                </el-form-item>
+                  <span style="margin-left: 12px;color: #f72525;;"></span>
+                </el-form-item> -->
                 <el-form-item v-if="checked" class="text-left flex" label="余额">
                   <el-input v-model="balanceNum"></el-input>
                 </el-form-item>
                 <el-form-item class="text-left flex" label="频率">
-                  <el-input v-model="executionFrequency"></el-input>
+                  <template slot="label">
+                    <span style="margin-right: 6px;">频率</span>
+                    <el-tooltip effect="light" content="10点59分59秒会自动开启任务，300毫秒提交一次，因为接口的往返时间大概在200ms以上，请求五次或者有一条成功的便会自动结束" placement="bottom">
+                      <i class="el-icon-warning-outline"></i>
+                    </el-tooltip>
+                  </template>
+                  <el-input disabled v-model="executionFrequency"></el-input>
                   <span style="margin-left: 10px;">毫秒</span>
                 </el-form-item>
                 <div class="btns-wrapper">
                   <el-button
                     type="primary"
                     @click="startPuppeteer"
-                    v-loading="loadBrowser"
+                    v-loading="browserLoading"
                   >
                     {{ startText }}
                   </el-button>
@@ -76,7 +82,7 @@
           </div>
           <div class="right">
             <div class="section">
-              <span>参数设置</span>
+              <span>参数设置（修改完及时保存）</span>
               <el-form label-width="100px">
                 <el-form-item>
                   <template slot="label">
@@ -104,6 +110,7 @@
                     </el-tooltip>
                   </template>
                   <el-input v-model="execution.executionFrequency"></el-input>
+                  <span style="display: inline-block;width: 40px;margin-left: 10px;">毫秒</span>
                 </el-form-item>
                 <el-form-item>
                   <template slot="label">
@@ -133,7 +140,8 @@
           </div>
         </div>
         <div class="section operation-row">
-          <div class="btn btn-add">增加账号cookies</div>
+          <div class="btn btn-add" @click="addCookies">增加账号cookies</div>
+          <div class="btn" @click="saveParams">保存参数</div>
           <div class="btn start" @click="start">开始</div>
           <div class="btn stop"  @click="stopTask">停止</div>
         </div>
@@ -167,19 +175,20 @@
         </div>
       </el-tab-pane>
       <el-tab-pane label="增加单据" name="second">
-        <el-button type="primary" @click="formVisible = true">新增单据</el-button>
+        <el-button type="primary" @click="caseFormType = 'add';caseFormVisible = true">新增单据</el-button>
         <el-button type="primary" @click="openConfig">导入/编辑单据</el-button>
-        <el-table :data="tableData" border style="width: 100%;margin-top: 12px;">
-          <el-table-column prop="patentName" label="案件名称" width="160">
+        <el-table :data="tableData" border style="width: 100%;margin-top: 12px;margin-bottom: 12px;">
+          <el-table-column prop="patentName" label="案件名称" width="110">
           </el-table-column>
-          <el-table-column prop="applyCompanyName" label="申请主体" width="160">
+          <el-table-column prop="applyCompanyName" label="申请主体" width="110">
           </el-table-column>
-          <el-table-column prop="appointPhone" label="联系方式"> </el-table-column>
-          <el-table-column prop="typeText" label="专利类型"> </el-table-column>
-          <el-table-column prop="applyClassifyCode" label="分类号"> </el-table-column>
+          <el-table-column prop="appointPhone" label="联系方式" width="110"> </el-table-column>
+          <el-table-column prop="typeText" label="专利类型" width="60"> </el-table-column>
+          <el-table-column prop="applyClassifyCode" label="分类号" width="58"> </el-table-column>
           <el-table-column prop="orderSubmitTime" label="预约时间" width="100"> </el-table-column>
-          <el-table-column label="预约时间">
+          <el-table-column label="预约时间" width="180" fixed="right">
             <template slot-scope="scope">
+              <el-button type="primary" @click="editCase(scope.row, scope.$index)">编辑</el-button>
               <el-button type="danger" @click="deleteCase(scope.$index)">删除</el-button>
             </template>
           </el-table-column>
@@ -192,31 +201,33 @@
           <li>本工具依然是看脸,不过可以比普通人同时多看几次脸</li>
           <li>1.启动浏览器，拖动滑块登陆过可以在网页中操作，这是抢购方式一，爬虫操作，速度较慢，继续往下</li>
           <li>2.在本客户端输入表单信息，或者在网页输入，会自动同步到此，预约时间你选任意合法格式</li>
-          <li>3.点击《开始》按钮，会直接并发提交数据，不经过网页端，但也可能会失败;如果失败原因是网络错误，网站崩溃会直接结束；如果失败原因是余额不足等错误，会继续按照执行频率循环执行，直到达到你设置的执行上限则结束运行</li>
+          <li>3.点击《开始》按钮，会直接并发提交数据，不经过网页端，但也可能会失败;如果失败原因是网络错误，网站崩溃,会继续执行直到有结果；如果失败原因是余额不足等错误，会继续按照执行频率循环执行，直到达到你设置的执行上限则结束运行</li>
           <li>如果任务启动后卡住不动没有输出日志，大概率是504，省局崩溃</li>
-          <li>串行/并行模式：串行是等待第一个案子预约结果成功或失败才会开启下一轮，并行是单张或多张单据按照设定的频率即时间间隔循环执行；建议填写多张单据，并在放号之前1到2秒开始执行，并控制好次数，没到放号之前的请求必然是无效；填写多张单据时，执行任务会轮流提交不同的案子，减少相同案子重复预约成功的概率。<span style="color: #bb7373;">不管是串行或者并行，建议填写多个案子，并选择不同日期，提高不同日期的预约成功率</span></li>
+          <li>串行/并行模式：串行是等待第一个案子预约结果成功或失败才会开启下一轮，并行是单张或多张单据按照设定的频率即时间间隔循环执行；建议填写多张单据，并在放号之前1到2秒开始执行，并控制好次数，没到放号之前的请求必然是无效；填写多张单据时，执行任务会轮流提交不同的案子，减少相同案子重复预约成功的概率。<span style="color: #bb7373;">不管是串行或者并行，建议填写多个案子，并选择不同日期，提高不同日期的预约成功率，同时，只要有一个预约成功，会即可终止任务，但是不代表并行模式下只会成功一个！！！</span></li>
+          <li>不要连续点击多次开始，要重新开始时请先停止</li>
           <br />
           待开发功能：
           <li>1.执行中如果发现执行结束后仍然未发现有余额，则自动切换日期</li>
-          <li>2.目前串行模式最多只会成功预约上一个，为防止一个案子预约上多个重复数据</li>
+          <li>2.目前串行模式最多只会成功预约上一个，先看看效果</li>
+          <li>3.将来支持多cookies导入，同一次可登录多账号操作</li>
         </ul>
       </el-tab-pane>
     </el-tabs>
     <el-dialog
       title=""
-      :visible.sync="formVisible"
+      :visible.sync="caseFormVisible"
       width="500px"
       :close-on-click-modal="false"
       :close-on-press-escape="false"
       :center="true"
       :before-close="handleClose"
     >
-      <el-form class="order-form" label-width="120px" :model="form" ref="ruleForm" :rules="rules">
+      <el-form class="order-form" label-width="120px" :model="caseForm" ref="ruleForm" :rules="rules">
         <el-form-item class="text-left flex" label="案件名称" prop="patentName">
-          <el-input v-model="form.patentName"></el-input>
+          <el-input v-model="caseForm.patentName"></el-input>
         </el-form-item>
         <el-form-item class="text-left flex" label="申请主体" prop="applyCompanyId">
-          <el-select ref="applyCompany" v-model="form.applyCompanyId" placeholder=""  @change="onApplyCompanyChange">
+          <el-select ref="applyCompany" v-model="caseForm.applyCompanyId" placeholder=""  @change="onApplyCompanyChange">
             <el-option label="江苏瑞耀纤维科技有限公司" value="aba8a1af48dc423cb74b98ee2766ac31"></el-option>
             <el-option label="无锡维邦工业设备成套技术有限公司" value="3f99d86ac20845a785983f63b14c08da"></el-option>
             <el-option label="仪征市龙港机械制造有限公司" value="c8ab5aa31190414088fff2a1ea13892a"></el-option>
@@ -225,25 +236,25 @@
           </el-select>
         </el-form-item>
         <el-form-item class="text-left flex" label="联系方式" prop="appointPhone">
-          <el-input v-model="form.appointPhone"></el-input>
+          <el-input v-model="caseForm.appointPhone"></el-input>
         </el-form-item>
         <el-form-item class="text-left flex" label="专利类型" prop="typeCode">
-          <el-select v-model="form.typeCode" placeholder="" ref="type">
+          <el-select v-model="caseForm.typeCode" placeholder="" ref="type">
             <el-option label="发明" value="1"></el-option>
             <el-option label="实用新型" value="2"></el-option>
             <el-option label="外观设计" value="3"></el-option>
           </el-select>
         </el-form-item>
         <el-form-item class="text-left flex" label="分类号" prop="applyClassifyCode">
-          <el-input v-model="form.applyClassifyCode"></el-input>
+          <el-input v-model="caseForm.applyClassifyCode"></el-input>
         </el-form-item>
         <el-form-item class="text-left flex" label="预约时间" prop="orderSubmitTime">
-          <el-input v-model="form.orderSubmitTime" placeholder="格式如：2022-08-29"></el-input>
+          <el-input v-model="caseForm.orderSubmitTime" placeholder="格式如：2022-08-29"></el-input>
         </el-form-item>
       </el-form>
       <div slot="footer">
         <el-button @click="handleClose">取 消</el-button>
-        <el-button type="primary" @click="addInvoice">确 定</el-button>
+        <el-button type="primary" @click="setCase">确 定</el-button>
       </div>
     </el-dialog>
   </div>
@@ -281,7 +292,7 @@ export default {
       password: '',
       options: [{ value: 0, label: '666' }],
       openBowser: false,
-      loadBrowser: false,
+      browserLoading: false,
       startText: '启动浏览器',
       hasData: false,
       count: 0,
@@ -295,7 +306,7 @@ export default {
       ],
       checked: false,
       balanceNum: 500,
-      executionFrequency: 500,
+      executionFrequency: 300,
       execution: {
         limit: 5,
         threadCount: 1,
@@ -304,8 +315,8 @@ export default {
       },
       // 案子列表
       tableData: [],
-      formVisible: false,
-      form: {
+      caseFormVisible: false,
+      caseForm: {
         patentName: '',
         applyCompanyId: '',
         // applyCompanyName: '',
@@ -324,7 +335,10 @@ export default {
           { required: true, message: '请输入预约时间', trigger: 'blur' },
           { pattern: /^((((19|20)\d{2})-(0?[13-9]|1[012])-(0?[1-9]|[12]\d|30))|(((19|20)\d{2})-(0?[13578]|1[02])-31)|(((19|20)\d{2})-0?2-(0?[1-9]|1\d|2[0-8]))|((((19|20)([13579][26]|[2468][048]|0[48]))|(2000))-0?2-29))$/, message: '请输入正确格式', trigger: 'blur' }
         ]
-      }
+      },
+      cookies: '',
+      caseFormType: 'add',
+      editCaseFormIdex: '0'
     }
   },
   computed: {
@@ -332,16 +346,39 @@ export default {
       return process.env.NODE_ENV === 'development'
     },
     logPath () {
-      return remote.getGlobal('STORE_PATH') + 'main.log'
+      return remote.getGlobal('STORE_PATH') + '/logs/main.log'
     }
   },
   methods: {
+    addCookies () {
+      const cookies = this.cookies
+      this.$prompt('请输入cookies', '提示', {
+        confirmButtonText: '确定',
+        inputValue: cookies,
+        inputType: 'textarea',
+        closeOnClickModal: false,
+        closeOnPressEscape: false,
+        customClass: 'cookies-prompt'
+      }).then(({ value }) => {
+        ipcRenderer.invoke('setData', [{
+          key: 'cookies',
+          value: value
+        }])
+        this.getData()
+      })
+    },
     destroySoft () {
       ipcRenderer.invoke('destroy')
     },
     async deleteCase (index) {
       await ipcRenderer.invoke('delete-case', index)
-      this.getCaseList()
+      this.getData()
+    },
+    async editCase (record, index) {
+      this.caseFormType = 'edit'
+      this.caseFormVisible = true
+      this.caseForm = JSON.parse(JSON.stringify(record))
+      this.editCaseFormIdex = index
     },
     openConfig () {
       this.$message({
@@ -351,8 +388,9 @@ export default {
       })
       ipcRenderer.invoke('open-config')
     },
-    addInvoice () {
-      const { patentName, applyCompanyId, appointPhone, typeCode, applyClassifyCode, orderSubmitTime } = this.form
+    setCase () {
+      const { patentName, applyCompanyId, appointPhone, typeCode, applyClassifyCode, orderSubmitTime } = this.caseForm
+      console.log(patentName)
       const formData = {
         patentName,
         appId: 'yushen',
@@ -368,30 +406,25 @@ export default {
         orderSubmitTime,
         executionFrequency: Number.parseInt(this.executionFrequency)
       }
-      this.tableData.push({ ...formData })
-      this.formVisible = false
-      ipcRenderer.send('setData', {
+      if (this.caseFormType === 'add') {
+        this.tableData.push({ ...formData })
+      } else {
+        this.$set(this.tableData, this.editCaseFormIdex, formData)
+      }
+      this.caseFormVisible = false
+      ipcRenderer.invoke('setData', [{
         key: 'caseList',
         value: this.tableData
-      })
+      }])
     },
     handleClose () {
-      this.formVisible = false
+      this.caseFormVisible = false
       this.$refs.ruleForm.clearValidate()
     },
     onApplyCompanyChange () {
       this.$nextTick(() => {
         console.log(this.$refs.applyCompany.selectedLabel)
       })
-    },
-    async getUsers () {
-      const users = await ipcRenderer.invoke('get-users')
-      console.log(users)
-      if (users && users.length) {
-        const user = users[0]
-        this.username = user.username
-        this.password = user.password
-      }
     },
     querySearch (queryString, cb) {
       const users = this.users
@@ -432,6 +465,26 @@ export default {
     stopTask () {
       ipcRenderer.send('stopTask')
     },
+    async saveParams () {
+      try {
+        const executionParams = {
+          executionFrequency: Number.parseInt(this.execution.executionFrequency),
+          threads: Number.parseInt(this.execution.threadCount),
+          limit: Number.parseInt(this.execution.limit),
+          model: Number.parseInt(this.execution.model)
+        }
+        await ipcRenderer.invoke('set-execution-params', executionParams)
+        this.$message({
+          type: 'success',
+          message: '保存成功'
+        })
+      } catch (error) {
+        this.$message({
+          type: 'error',
+          message: error.message
+        })
+      }
+    },
     async start () {
       // this.addRipple()
       if (!(this.tableData && this.tableData.length)) {
@@ -445,16 +498,8 @@ export default {
         type: 'success',
         message: '开始执行，请稍后'
       })
-      const executionParams = {
-        executionFrequency: Number.parseInt(this.execution.executionFrequency),
-        threads: Number.parseInt(this.execution.threadCount),
-        limit: Number.parseInt(this.execution.limit),
-        model: Number.parseInt(this.execution.model)
-      }
-      await ipcRenderer.invoke('set-execution-params', executionParams)
-
       const formDataList = this.tableData && this.tableData.length ? this.tableData : []
-      // const { patentName, applyCompanyId, applyCompanyName, appointPhone, typeCode, typeText, applyClassifyCode, orderSubmitTime } = form
+      // const { patentName, applyCompanyId, applyCompanyName, appointPhone, typeCode, typeText, applyClassifyCode, orderSubmitTime } = caseForm
       // const formData = {
       //   patentName,
       //   appId: 'yushen',
@@ -476,7 +521,6 @@ export default {
         item.applyFieldName = '新型功能和结构材料'
       })
       const { code, msg, message } = await ipcRenderer.invoke('submit', formDataList)
-      console.log(code, msg)
       if (code === 0) {
         this.$message({
           type: 'success',
@@ -489,7 +533,7 @@ export default {
         })
       }
     },
-    startPuppeteer () {
+    loadBrowser () {
       if (this.testEmpty(this.username) || this.testEmpty(this.password)) {
         this.$message({
           type: 'error',
@@ -513,6 +557,19 @@ export default {
       this.openBowser = true
       this.startText = '恢复启动'
     },
+    startPuppeteer () {
+      if (this.cookies) {
+        this.$confirm('系统检查到有cookies存在，过期之前不需要再登录了，是否仍要启动浏览器?', '提示', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        }).then(() => {
+          this.loadBrowser()
+        })
+      } else {
+        this.loadBrowser()
+      }
+    },
     repeatSearch (applyNum) {
       // 同步,会堵塞渲染进程
       // const done = ipcRenderer.sendSync('search', applyNum)     // 有可能卡住,因为是同步的,会导致按钮点不了
@@ -531,22 +588,38 @@ export default {
     jump () {
       this.$router.push('/path')
     },
-    async getCaseList () {
-      const caseList = await ipcRenderer.invoke('get-form')
-      this.tableData = caseList
+    async getData () {
+      try {
+        console.log('get data')
+        const data = await ipcRenderer.invoke('getData', ['users', 'cookies', 'caseList'])
+        const [users, cookies, caseList] = data
+        if (users && users.length) {
+          const user = users[0]
+          this.username = user.username
+          this.password = user.password
+        }
+        this.tableData = caseList
+        this.cookies = cookies
+      } catch (error) {
+        this.$message({
+          type: 'error',
+          messag: error.message
+        })
+      }
     }
   },
   created () {
-    // this.getUsers()
   },
   async mounted () {
     console.log('home mounted')
     setTimeout(async () => {
-      this.getUsers()
-      this.getCaseList()
+      this.getData()
     }, 1000)
     ipcRenderer.on('log', (event, ans) => {
       this.logs.push(ans)
+    })
+    ipcRenderer.on('setCookies', (event, ans) => {
+      this.cookies = ans
     })
     ipcRenderer.on('closePage', (event, ans) => {
       console.log('page closed')
@@ -614,9 +687,6 @@ export default {
       .el-form-item__content {
         // width: 280px !important;
         margin-left: 60px !important;
-        > * {
-          width: 100% !important;
-        }
     }
       }
     tbody {
@@ -797,5 +867,6 @@ export default {
     line-height: 40px;
     align-items: center;
   }
+
 }
 </style>

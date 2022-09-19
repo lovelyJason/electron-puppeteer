@@ -3,14 +3,61 @@
     <div class="met-log-body col-xl-9 pl-md-5">
       <ul class="met-log-list list-unstyled pl-md-5 ml-md-5">
         <h2 class="d-inline-block my-2 pl-3 pl-md-0">2022</h2>
-          <li class="position-relative pl-3 pl-md-4 py-3 py-md-4">
+        <li class="position-relative pl-3 pl-md-4 py-3 py-md-4">
+          <h3 class="h6 position-absolute text-muted">2022.9.9</h3>
+          <span
+            class="rounded-circle p-1 position-absolute bg-white text-center font-weight-bold"
+            >·</span
+          >
+          <dl class="mb-0">
+            <dt><h4 class="h5">科佑新创扫号助手通用版(专属) 0.0.9 更新日志</h4></dt>
+            <dd class="card p-3 mb-0 mt-3 bg-light oya met-scrollbar">
+              <div class="met-editor font-size-14 text-muted">
+                <p>1.支持导入cookies，可复制cookie给他人使用软件；</p>
+                <p>2.修复任务过程中，code未返回0时指针未进行移动的bug；</p>
+              </div>
+            </dd>
+          </dl>
+        </li>
+        <li class="position-relative pl-3 pl-md-4 py-3 py-md-4">
+          <h3 class="h6 position-absolute text-muted">2022.9.9</h3>
+          <span
+            class="rounded-circle p-1 position-absolute bg-white text-center font-weight-bold"
+            >·</span
+          >
+          <dl class="mb-0">
+            <dt><h4 class="h5">科佑新创扫号助手通用版(专属) 0.0.8 更新日志</h4></dt>
+            <dd class="card p-3 mb-0 mt-3 bg-light oya met-scrollbar">
+              <div class="met-editor font-size-14 text-muted">
+                <p>1.省局网站崩溃时本程序不会终止任务仍然会继续执行，直到有结果为止；</p>
+              </div>
+            </dd>
+          </dl>
+        </li>
+        <li class="position-relative pl-3 pl-md-4 py-3 py-md-4">
+          <h3 class="h6 position-absolute text-muted">2022.9,5</h3>
+          <span
+            class="rounded-circle p-1 position-absolute bg-white text-center font-weight-bold"
+            >·</span
+          >
+          <dl class="mb-0">
+            <dt><h4 class="h5">科佑新创扫号助手通用版(专属) 0.0.7 更新日志</h4></dt>
+            <dd class="card p-3 mb-0 mt-3 bg-light oya met-scrollbar">
+              <div class="met-editor font-size-14 text-muted">
+                <p>1.爬虫会在网页直接输入日期，10点59分59秒开始循环提交按钮，频率为300ms；</p>
+                <p>2.修复其他一些问题；</p>
+              </div>
+            </dd>
+          </dl>
+        </li>
+        <li class="position-relative pl-3 pl-md-4 py-3 py-md-4">
           <h3 class="h6 position-absolute text-muted">2022.8.26</h3>
           <span
             class="rounded-circle p-1 position-absolute bg-white text-center font-weight-bold"
             >·</span
           >
           <dl class="mb-0">
-            <dt><h4 class="h5">科佑新创扫号助手(专属) 0.0.3 更新日志</h4></dt>
+            <dt><h4 class="h5">科佑新创扫号助手通用版(专属) 0.0.3 更新日志</h4></dt>
             <dd class="card p-3 mb-0 mt-3 bg-light oya met-scrollbar">
               <div class="met-editor font-size-14 text-muted">
                 <p>1.账号支持持久化存储；</p>
@@ -28,7 +75,7 @@
             >·</span
           >
           <dl class="mb-0">
-            <dt><h4 class="h5">科佑新创扫号助手(专属) 0.0.2 更新日志</h4></dt>
+            <dt><h4 class="h5">科佑新创扫号助手通用版(专属) 0.0.2 更新日志</h4></dt>
             <dd class="card p-3 mb-0 mt-3 bg-light oya met-scrollbar">
               <div class="met-editor font-size-14 text-muted">
                 <p>1.自动拉取版本更新；</p>
@@ -45,7 +92,7 @@
             >·</span
           >
           <dl class="mb-0">
-            <dt><h4 class="h5">科佑新创扫号助手(专属) 0.0.1 更新日志</h4></dt>
+            <dt><h4 class="h5">科佑新创扫号助手通用版(专属) 0.0.1 更新日志</h4></dt>
             <dd class="card p-3 mb-0 mt-3 bg-light oya met-scrollbar">
               <div class="met-editor font-size-14 text-muted">
                 <p>1.基本完成任务自动化；</p>

@@ -1,6 +1,6 @@
 {
   "name": "patent-task",
-  "version": "0.0.5",
+  "version": "0.0.9",
   "private": true,
   "scripts": {
     "serve": "vue-cli-service serve",
@@ -23,7 +23,9 @@
     "electron-updater": "^4.3.5",
     "element-ui": "^2.15.0",
     "exceljs": "^4.2.0",
+    "https": "^1.0.0",
     "jquery": "^3.6.1",
+    "node-machine-id": "^1.1.12",
     "node-schedule": "^2.1.0",
     "node-xlsx": "^0.16.1",
     "os": "^0.1.1",

@@ -81,8 +81,8 @@ const interval = function (p, delay, limit, cb) {
   let count = 0
   return new Promise((resolve, reject) => {
     const timerId = setInterval(async () => {
-      count++
       try {
+        count++
         // console.log('开启定时任务')
         if (typeof cb === 'function') {
           cb(timerId, count)
