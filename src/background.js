@@ -18,7 +18,7 @@ dayjs.extend(AdvancedFormat)
 // console.log(dayjs('2022-08-26').isSameOrAfter(dayjs(dayjs().format('YYYY-MM-DD'))))
 
 const https = require('https');
-const { machineIdSync } = require('node-machine-id');
+const { machineIdSync, machineId } = require('node-machine-id');
 const fs = require('fs')
 const puppeteer = require("puppeteer");
 const http = require('http');
@@ -38,7 +38,6 @@ const instance = axios.create({
     rejectUnauthorized: false
   })
 });
-
 // const isDev = require('electron-is-dev');
 
 const isDevelopment = process.env.NODE_ENV !== 'production'
@@ -57,6 +56,7 @@ let formDataList = []
 let stopTaskFlag = false
 let webPageTimerId = null
 let inProgress = false
+let has_auth = false
 
 // let rule = new schedule.RecurrenceRule();
 // 毫秒无效， 当秒间隔时间加上当前时间大于60的时候不会生效
@@ -86,6 +86,22 @@ console.log('用户目录', STORE_PATH)
 global.STORE_PATH = STORE_PATH
 global.CONFIG_PATH = STORE_PATH + '/' + 'config.json'
 global.machineId = machineIdSync()    // e40c2e6224c173ffb4a8b332c49d4527cbd91e3b1d0f56c22b71dd1627d4f31d
+
+;(async function() {
+  try {
+    let res = await axios.get('https://qdovo.com/api/patent/user/list')
+    let codeList = res.data.data
+    global.machineIdList = codeList
+    console.log(codeList, global.machineId)
+    has_auth = codeList.some(val => {
+      return val.id === global.machineId
+    })
+    console.log('has_auth', has_auth)
+  } catch (error) {
+    console.log(error.message)
+  }
+}());
+// console.log(22222) // 此处先于上面执行
 
 // log.error('Hello, log error');
 // log.warn('Hello, log warn');
@@ -131,13 +147,14 @@ function getLocalAreaNetworkIPAdress() {
       }
   }
 }
-async function getOuterNetIPAdress() {
+function getOuterNetIPAdress() {
   let url = 'https://ifconfig.me/ip'
   return axios.get(url).then(res => {
     let ip = res.data
     return ip
   })
 }
+
 
 function getUserInfo() {
   let url = 'http://www.qdovo.com/api/patent/user'
@@ -849,14 +866,6 @@ async function debug(event) {
   await timeout(300)
   await closeTimeModalButton.click()
 }
-ipcMain.handle('getData', (event, ans) => {
-  let list = []
-  ans = ans || []
-  ans.forEach(val => {
-    list.push(store.get(val))
-  })
-  return list
-})
 // console.log(path.join(__static,"./"))  // D:\projects\electron-puppeteer\public\
 async function createWindow() {
   // Menu.setApplicationMenu()
@@ -898,6 +907,14 @@ async function createWindow() {
   global.win = win
 
   win.webContents.send('setCookies', store.get('cookies'))
+  ipcMain.handle('getData', (event, ans) => {
+    let list = []
+    ans = ans || []
+    ans.forEach(val => {
+      list.push(store.get(val))
+    })
+    return list
+  })
   ipcMain.handle('setData', (event, ans) => {
     ans.forEach(val => {
       const { key, value } = val
@@ -921,11 +938,25 @@ async function createWindow() {
     return true
   })
   ipcMain.handle('set-execution-params', (event, ans) => {
+    if (!has_auth) {
+      win.webContents.send('message', {
+        type: 'error',
+        message: '未经授权，禁止操作，请联系作者'
+      })
+      return false
+    }
     executionParams = ans
     return true
   })
   // 开始提交任务
   ipcMain.handle('submit', async (event, ans) => {
+    if(!has_auth) {
+      win.webContents.send('message', {
+        type: 'error',
+        message: '未经授权，禁止操作，请联系作者'
+      })
+      return
+    }
     if(inProgress) {
       win.webContents.send('log', '已经有任务在进行了，请勿重复操作......')
       return
@@ -935,19 +966,8 @@ async function createWindow() {
     curExecutionCount = 1
     executionSuccessCount = 0
     try {
-      if(user_status == '0') {
-        win.webContents.send('message', {
-          type: 'error',
-          message: '未经授权，请联系作者'
-        })
-        setTimeout(() => {
-          app.quit()
-        }, 2000)
-        return
-      }
       win.webContents.send('log', '任务执行中，请耐心等待......')
       // 并行执行
-      console.log('model:', executionParams.model)
       if(executionParams.model === 2 || !executionParams.model) {
         let res = await interval(() => {
           return submitForm()
@@ -970,6 +990,13 @@ async function createWindow() {
   })
   ipcMain.on('start', async (event, ans) => {
     try {
+      if(!has_auth) {
+        win.webContents.send('message', {
+          type: 'error',
+          message: '未经授权，禁止操作，请联系作者'
+        })
+        return
+      }
       // 都有效果
       event.sender.send('log', '正在为您初始化页面，将自动登录账号，但是需要自己拖动滑块；如果出错了没有打开最终预约页面，需要自己导入cookies，教程：http://cdn.qdovo.com/doudou.gif')
       // win.webContents.send('log', '正在为您初始化页面，将自动登录账号，但是需要自己拖动滑块')
@@ -1036,6 +1063,13 @@ async function createWindow() {
     restore(event, ans)
   })
   ipcMain.on('stopTask', async (event, ans) => {
+    if (!has_auth) {
+      win.webContents.send('message', {
+        type: 'error',
+        message: '未经授权，禁止操作，请联系作者'
+      })
+      return false
+    }
     stopTask()
   })
   // 数据持久化

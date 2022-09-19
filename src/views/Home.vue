@@ -473,11 +473,13 @@ export default {
           limit: Number.parseInt(this.execution.limit),
           model: Number.parseInt(this.execution.model)
         }
-        await ipcRenderer.invoke('set-execution-params', executionParams)
-        this.$message({
-          type: 'success',
-          message: '保存成功'
-        })
+        const res = await ipcRenderer.invoke('set-execution-params', executionParams)
+        if (res) {
+          this.$message({
+            type: 'success',
+            message: '保存成功'
+          })
+        }
       } catch (error) {
         this.$message({
           type: 'error',
@@ -601,6 +603,7 @@ export default {
         this.tableData = caseList
         this.cookies = cookies
       } catch (error) {
+        console.log('出错了', error)
         this.$message({
           type: 'error',
           messag: error.message
@@ -640,6 +643,7 @@ export default {
       })
     })
     ipcRenderer.on('message', (event, ans) => {
+      console.log('出错了', ans)
       const { type, message } = ans
       this.$message({
         type,

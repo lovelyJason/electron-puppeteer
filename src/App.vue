@@ -31,13 +31,14 @@
 </template>
 
 <script>
-const { ipcRenderer, remote } = require('electron')
+const { remote } = require('electron')
 
 export default {
   data () {
     return {
       contactMeVisible: false,
-      hasAuth: false
+      loading: false,
+      hasAuth: true
     }
   },
   computed: {
@@ -48,18 +49,25 @@ export default {
   methods: {
     async getData () {
       try {
-        const data = await ipcRenderer.invoke('getData', ['machineIds'])
-        this.hasAuth = data[0].includes(this.machineId)
+        const codeList = remote.getGlobal('machineIdList')
+        this.hasAuth = codeList.some(val => {
+          return val.id === this.machineId
+        })
       } catch (error) {
+        console.log('出错了', error)
+        this.hasAuth = false
         this.$message({
           type: 'error',
           messag: error.message
         })
       }
+      this.loading = false
     }
   },
   mounted () {
-    this.getData()
+    setTimeout(() => {
+      this.getData()
+    }, 0)
   }
 }
 </script>
