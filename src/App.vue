@@ -1,7 +1,7 @@
 <template>
   <div id="app">
     <div id="nav">
-      <span>科佑新创扫号助手通用版</span>
+      <span>科佑新创扫号助手内部通用版</span>
       <span v-if="!hasAuth" class="no-auth" @click="contactMeVisible = true">！未授权</span>
       <!-- | -->
       <!-- <router-link to="/about">About</router-link> -->
@@ -31,7 +31,7 @@
 </template>
 
 <script>
-const { remote } = require('electron')
+const { ipcRenderer, remote } = require('electron')
 
 export default {
   data () {
@@ -68,6 +68,9 @@ export default {
     setTimeout(() => {
       this.getData()
     }, 0)
+    ipcRenderer.on('checkAuth', (event, ans) => {
+      this.hasAuth = ans
+    })
   }
 }
 </script>

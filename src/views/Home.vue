@@ -171,6 +171,11 @@
           <router-link to="/changelog" class="update-log-a">
             <div class="update-log"><i  style="margin-right: 6px;" class="el-icon-chat-line-round"></i>更新日志</div>
           </router-link>
+          <span class="ip">
+            <span>IP: {{ ip }}</span>
+            <i v-if="inWhiteList" style="margin-left: 6px;" class="el-icon-circle-check"></i>
+            <i v-else style="margin-left: 6px;" class="el-icon-circle-close"></i>
+          </span>
 
         </div>
       </el-tab-pane>
@@ -347,6 +352,12 @@ export default {
     },
     logPath () {
       return remote.getGlobal('STORE_PATH') + '/logs/main.log'
+    },
+    ip () {
+      return remote.getGlobal('ip')
+    },
+    inWhiteList () {
+      return remote.getGlobal('inWhiteList')
     }
   },
   methods: {
@@ -358,6 +369,7 @@ export default {
         inputType: 'textarea',
         closeOnClickModal: false,
         closeOnPressEscape: false,
+        inputPlaceholder: '格式为front_bpm.session.id=xxx; JSESSIONID=xxx\n如何设置，参考http://cdn.qdovo.com/doudou.gif',
         customClass: 'cookies-prompt'
       }).then(({ value }) => {
         ipcRenderer.invoke('setData', [{
@@ -522,7 +534,7 @@ export default {
         item.applyFieldCode = '2'
         item.applyFieldName = '新型功能和结构材料'
       })
-      const { code, msg, message } = await ipcRenderer.invoke('submit', formDataList)
+      const { code, msg, message } = await ipcRenderer.invoke('submit', formDataList) || {}
       if (code === 0) {
         this.$message({
           type: 'success',
@@ -531,7 +543,7 @@ export default {
       } else {
         this.$message({
           type: 'error',
-          message: msg || message
+          message: msg || message || '系统异常'
         })
       }
     },
@@ -543,10 +555,10 @@ export default {
         })
         return
       }
-      if (this.openBowser) {
-        this.restore()
-        return
-      }
+      // if (this.openBowser) {
+      //   this.restore()
+      //   return
+      // }
       const options = {
         username: this.username,
         password: this.password,
@@ -557,7 +569,7 @@ export default {
       }
       ipcRenderer.send('start', options)
       this.openBowser = true
-      this.startText = '恢复启动'
+      // this.startText = '恢复启动'
     },
     startPuppeteer () {
       if (this.cookies) {
@@ -832,8 +844,8 @@ export default {
   }
   .footer {
     position: fixed;
-    width: 100%;
-    bottom: 10px;
+    width: calc(~"100% - 20px");
+    bottom: 6px;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -842,6 +854,12 @@ export default {
       height: 24px;
       text-decoration: none;
       margin-left: 8px;
+    }
+    .ip {
+      position: absolute;
+      right: 0;
+      color: rgb(182, 177, 177);
+      font-size: 14px;
     }
   }
   .update-log {

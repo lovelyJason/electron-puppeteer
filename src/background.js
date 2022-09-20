@@ -9,7 +9,6 @@ import Update from './checkupdate'; // 引入上面的文件
 import dayjs from 'dayjs'
 import AdvancedFormat from 'dayjs/plugin/IsSameOrAfter'
 import axios from 'axios'
-// import { resolve } from 'path'
 // import run from './utils/run'
 // import api from '@/lib/api'
 // require('@electron/remote/main').initialize()      // electron 10.0以下版本不兼容
@@ -18,7 +17,7 @@ dayjs.extend(AdvancedFormat)
 // console.log(dayjs('2022-08-26').isSameOrAfter(dayjs(dayjs().format('YYYY-MM-DD'))))
 
 const https = require('https');
-const { machineIdSync, machineId } = require('node-machine-id');
+const { machineIdSync } = require('node-machine-id');
 const fs = require('fs')
 const puppeteer = require("puppeteer");
 const http = require('http');
@@ -50,13 +49,12 @@ let executionParams = {
 }
 let curExecutionCount = 1 // 当前执行的次序
 let executionSuccessCount = 0
-const accept_ip_list = ['210.21.226.100', '121.231.26.20', '183.213.133.139', '113.99.149.165']
-let user_status = null
 let formDataList = []
 let stopTaskFlag = false
 let webPageTimerId = null
 let inProgress = false
 let has_auth = false
+const whiteList = ['210.21.226.100', '121.231.26.20', '183.213.133.139', '113.99.149.165']
 
 // let rule = new schedule.RecurrenceRule();
 // 毫秒无效， 当秒间隔时间加上当前时间大于60的时候不会生效
@@ -86,8 +84,21 @@ console.log('用户目录', STORE_PATH)
 global.STORE_PATH = STORE_PATH
 global.CONFIG_PATH = STORE_PATH + '/' + 'config.json'
 global.machineId = machineIdSync()    // e40c2e6224c173ffb4a8b332c49d4527cbd91e3b1d0f56c22b71dd1627d4f31d
+global.ip = '127.0.0.1'
+global.inWhiteList = false
 
 ;(async function() {
+  let url = 'https://ifconfig.me/ip'
+  let res = await axios.get(url)
+  let ip = res ? res.data : null
+  global.ip = ip
+  global.inWhiteList = whiteList.includes(ip)
+}());
+
+;(async function() {
+  await checkMachineAuth()
+}());
+async function checkMachineAuth() {
   try {
     let res = await axios.get('https://qdovo.com/api/patent/user/list')
     let codeList = res.data.data
@@ -96,11 +107,16 @@ global.machineId = machineIdSync()    // e40c2e6224c173ffb4a8b332c49d4527cbd91e3
     has_auth = codeList.some(val => {
       return val.id === global.machineId
     })
-    console.log('has_auth', has_auth)
   } catch (error) {
-    console.log(error.message)
+    has_auth = false
+    throw error
   }
-}());
+  win.webContents.send('checkAuth', has_auth)
+}
+let checkAuthJob = schedule.scheduleJob('00 58 10 * * *', async function () {
+  await checkMachineAuth()
+})
+let webPageJob = null
 // console.log(22222) // 此处先于上面执行
 
 // log.error('Hello, log error');
@@ -146,27 +162,6 @@ function getLocalAreaNetworkIPAdress() {
           }
       }
   }
-}
-function getOuterNetIPAdress() {
-  let url = 'https://ifconfig.me/ip'
-  return axios.get(url).then(res => {
-    let ip = res.data
-    return ip
-  })
-}
-
-
-function getUserInfo() {
-  let url = 'http://www.qdovo.com/api/patent/user'
-  return axios.get(url).then(res => {
-    return res.data
-  })
-}
-function diableUser() {
-  let url = 'http://www.qdovo.com/api/patent/user/disable'
-  return axios.post(url).then(res => {
-    return res.data
-  })
 }
 
 async function submitFormSerially() {
@@ -813,12 +808,12 @@ async function postTask(event, ans) {
 
       // 不如直接手输日期，等待倒计时提交
       let submitBtn = await lastPage.$('#onSubmit')
-      let job = schedule.scheduleJob('59 59 10 * * *', async function () {
+      webPageJob = schedule.scheduleJob('59 59 10 * * *', async function () {
         let count = 1
         webPageTimerId = setInterval(() => {
           if(count >= 5) {
             clearInterval(webPageTimerId)
-            job.cancel()
+            webPageJob.cancel()
           }
           count++
           submitBtn.click()
@@ -868,18 +863,6 @@ async function debug(event) {
 }
 // console.log(path.join(__static,"./"))  // D:\projects\electron-puppeteer\public\
 async function createWindow() {
-  // Menu.setApplicationMenu()
-  // Create the browser window.
-  // let self_ip = await getOuterNetIPAdress()
-  // user_status = await getUserInfo()
-  // console.log(self_ip, user_status)
-  // if(!accept_ip_list.includes(self_ip) || user_status == '0') {
-  //   new BrowserWindow({
-  //     width: 200,
-  //     height: 200
-  //   })
-  //   return
-  // }
   win = new BrowserWindow({
     width: 780,
     height: 760,
@@ -939,33 +922,31 @@ async function createWindow() {
   })
   ipcMain.handle('set-execution-params', (event, ans) => {
     if (!has_auth) {
-      win.webContents.send('message', {
-        type: 'error',
-        message: '未经授权，禁止操作，请联系作者'
-      })
-      return false
+      return { code: -1, msg: '未经授权，禁止操作，请联系作者' }
+    }
+    if(!global.inWhiteList) {
+      return { code: -1, msg: '不在ip白名单中，禁止操作' }
     }
     executionParams = ans
     return true
   })
   // 开始提交任务
   ipcMain.handle('submit', async (event, ans) => {
-    if(!has_auth) {
-      win.webContents.send('message', {
-        type: 'error',
-        message: '未经授权，禁止操作，请联系作者'
-      })
-      return
-    }
-    if(inProgress) {
-      win.webContents.send('log', '已经有任务在进行了，请勿重复操作......')
-      return
-    }
-    stopTaskFlag = false
-    formDataList = ans
-    curExecutionCount = 1
-    executionSuccessCount = 0
     try {
+      if(!has_auth) {
+        return { code: -1, msg: '未经授权，禁止操作，请联系作者' }
+      }
+      if(!global.inWhiteList) {
+        return { code: -1, msg: '不在ip白名单中，禁止操作' }
+      }
+      if(inProgress) {
+        win.webContents.send('log', '已经有任务在进行了，请勿重复操作......')
+        return false
+      }
+      stopTaskFlag = false
+      formDataList = ans
+      curExecutionCount = 1
+      executionSuccessCount = 0
       win.webContents.send('log', '任务执行中，请耐心等待......')
       // 并行执行
       if(executionParams.model === 2 || !executionParams.model) {
@@ -985,6 +966,7 @@ async function createWindow() {
         return { code: 0, msg: '本次任务操作完成' }
       }
     } catch (error) {
+      console.log('error985', error)
       return error
     }
   })
@@ -996,6 +978,13 @@ async function createWindow() {
           message: '未经授权，禁止操作，请联系作者'
         })
         return
+      }
+      if(!global.inWhiteList) {
+        win.webContents.send('message', {
+          type: 'error',
+          message: '不在ip白名单中，禁止操作'
+        })
+        return false
       }
       // 都有效果
       event.sender.send('log', '正在为您初始化页面，将自动登录账号，但是需要自己拖动滑块；如果出错了没有打开最终预约页面，需要自己导入cookies，教程：http://cdn.qdovo.com/doudou.gif')
@@ -1070,6 +1059,13 @@ async function createWindow() {
       })
       return false
     }
+    if(!global.inWhiteList) {
+      win.webContents.send('message', {
+        type: 'error',
+        message: '不在ip白名单中，禁止操作'
+      })
+      return false
+    }
     stopTask()
   })
   // 数据持久化
@@ -1088,6 +1084,8 @@ app.on('window-all-closed', () => {
   // to stay active until the user quits explicitly with Cmd + Q
   if (process.platform !== 'darwin') {
     app.quit()
+    checkAuthJob.cancel()
+    webPageJob && webPageJob.cancel()
   }
 })
 

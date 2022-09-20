@@ -27,7 +27,7 @@ module.exports = {
       builderOptions: {
         asar: true, // false可关闭压缩,源代码会放置到app目录下
         asarUnpack: 'node_modules/puppeteer/.local-chromium/**/*',
-        productName: '科佑新创扫号助手通用版',
+        productName: '科佑新创扫号助手内部通用版',
         artifactName: `${name}-setup-v${version}.exe`, // 此处应该是github release的最新版本
         copyright: 'Copyright © 2021 jasonhuang',
         nsis: {
@@ -53,7 +53,7 @@ module.exports = {
   configureWebpack: config => {
     config.plugins.forEach(val => {
       if (val instanceof HtmlWebpackPlugin) {
-        val.options.title = '科佑新创扫号助手通用版'
+        val.options.title = '科佑新创扫号助手内部通用版'
       }
     })
   }
