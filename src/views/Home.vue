@@ -167,13 +167,13 @@
 
         </div>
         <div class="footer">
-          <check-update class="check-update"></check-update>
+          <!-- <check-update class="check-update"></check-update> -->
           <router-link to="/changelog" class="update-log-a">
             <div class="update-log"><i  style="margin-right: 6px;" class="el-icon-chat-line-round"></i>更新日志</div>
           </router-link>
           <span class="ip">
             <span>IP: {{ ip }}</span>
-            <i v-if="inWhiteList" style="margin-left: 6px;" class="el-icon-circle-check"></i>
+            <i v-if="inWhitelist" style="margin-left: 6px;" class="el-icon-circle-check"></i>
             <i v-else style="margin-left: 6px;" class="el-icon-circle-close"></i>
           </span>
 
@@ -268,13 +268,14 @@
 <script>
 // @ is an alias to /src
 // import HelloWorld from '@/components/HelloWorld.vue'
-import CheckUpdate from './CheckUpdate'
+// import CheckUpdate from './CheckUpdate'
+import path from 'path'
 const { ipcRenderer, clipboard, remote } = require('electron')
 
 export default {
   name: 'Home',
   components: {
-    CheckUpdate
+    // CheckUpdate
   },
   data () {
     return {
@@ -343,7 +344,9 @@ export default {
       },
       cookies: '',
       caseFormType: 'add',
-      editCaseFormIdex: '0'
+      editCaseFormIdex: '0',
+      ip: '',
+      inWhitelist: false
     }
   },
   computed: {
@@ -351,13 +354,7 @@ export default {
       return process.env.NODE_ENV === 'development'
     },
     logPath () {
-      return remote.getGlobal('STORE_PATH') + '/logs/main.log'
-    },
-    ip () {
-      return remote.getGlobal('ip')
-    },
-    inWhiteList () {
-      return remote.getGlobal('inWhiteList')
+      return path.resolve(remote.getGlobal('STORE_PATH'), './logs/main.log')
     }
   },
   methods: {
@@ -456,9 +453,6 @@ export default {
           0
         )
       }
-    },
-    handleSelect () {
-
     },
     copy (text) {
       clipboard.writeText(text)
@@ -604,7 +598,8 @@ export default {
     },
     async getData () {
       try {
-        console.log('get data')
+        this.ip = remote.getGlobal('ip')
+        this.inWhitelist = remote.getGlobal('inWhitelist')
         const data = await ipcRenderer.invoke('getData', ['users', 'cookies', 'caseList'])
         const [users, cookies, caseList] = data
         if (users && users.length) {
@@ -845,7 +840,7 @@ export default {
   .footer {
     position: fixed;
     width: calc(~"100% - 20px");
-    bottom: 6px;
+    bottom: 10px;
     display: flex;
     justify-content: center;
     align-items: center;

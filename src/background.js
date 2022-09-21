@@ -54,7 +54,7 @@ let stopTaskFlag = false
 let webPageTimerId = null
 let inProgress = false
 let has_auth = false
-const whiteList = ['210.21.226.100', '121.231.26.20', '183.213.133.139', '113.99.149.165']
+let whiteList = [{ ip: '127.0.0.1' }]
 
 // let rule = new schedule.RecurrenceRule();
 // 毫秒无效， 当秒间隔时间加上当前时间大于60的时候不会生效
@@ -82,17 +82,26 @@ global.executionFrequency = 500
 const STORE_PATH = app.getPath('userData')
 console.log('用户目录', STORE_PATH)
 global.STORE_PATH = STORE_PATH
-global.CONFIG_PATH = STORE_PATH + '/' + 'config.json'
+global.CONFIG_PATH = path.resolve(STORE_PATH, './config.json')
 global.machineId = machineIdSync()    // e40c2e6224c173ffb4a8b332c49d4527cbd91e3b1d0f56c22b71dd1627d4f31d
 global.ip = '127.0.0.1'
-global.inWhiteList = false
+global.inWhitelist = false
 
 ;(async function() {
-  let url = 'https://ifconfig.me/ip'
-  let res = await axios.get(url)
-  let ip = res ? res.data : null
-  global.ip = ip
-  global.inWhiteList = whiteList.includes(ip)
+  try {
+    let res = await axios.get('https://qdovo.com/api/patent/user/whitelist')
+    whiteList = res.data.data
+    let res1 = await axios.get('https://ifconfig.me/ip')
+    let ip = res1 ? res1.data : '127.0.0.1'
+    global.ip = ip
+    global.inWhitelist = (ip === '127.0.0.1' || whiteList.some(val => {
+      return val.ip === ip
+    }))
+  } catch (error) {
+    global.ip = '127.0.0.1'
+    global.inWhitelist = true
+  }
+  log.info(global.ip, global.inWhitelist)
 }());
 
 ;(async function() {
@@ -103,7 +112,6 @@ async function checkMachineAuth() {
     let res = await axios.get('https://qdovo.com/api/patent/user/list')
     let codeList = res.data.data
     global.machineIdList = codeList
-    console.log(codeList, global.machineId)
     has_auth = codeList.some(val => {
       return val.id === global.machineId
     })
@@ -924,7 +932,7 @@ async function createWindow() {
     if (!has_auth) {
       return { code: -1, msg: '未经授权，禁止操作，请联系作者' }
     }
-    if(!global.inWhiteList) {
+    if(!global.inWhitelist) {
       return { code: -1, msg: '不在ip白名单中，禁止操作' }
     }
     executionParams = ans
@@ -936,7 +944,7 @@ async function createWindow() {
       if(!has_auth) {
         return { code: -1, msg: '未经授权，禁止操作，请联系作者' }
       }
-      if(!global.inWhiteList) {
+      if(!global.inWhitelist) {
         return { code: -1, msg: '不在ip白名单中，禁止操作' }
       }
       if(inProgress) {
@@ -979,7 +987,7 @@ async function createWindow() {
         })
         return
       }
-      if(!global.inWhiteList) {
+      if(!global.inWhitelist) {
         win.webContents.send('message', {
           type: 'error',
           message: '不在ip白名单中，禁止操作'
@@ -1059,7 +1067,7 @@ async function createWindow() {
       })
       return false
     }
-    if(!global.inWhiteList) {
+    if(!global.inWhitelist) {
       win.webContents.send('message', {
         type: 'error',
         message: '不在ip白名单中，禁止操作'

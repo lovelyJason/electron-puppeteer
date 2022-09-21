@@ -39,8 +39,10 @@ module.exports = {
           // installerHeaderIcon: "./build/icons/shortcut.ico",
           // shortcutName: 'shortcut.ico'
         },
+        appId: 'patentTask',
         win: {
-          icon: './build/icons/shortcut.ico'
+          icon: './build/icons/shortcut.ico',
+          target: ['portable'] // setup文件免安装版本
         }
       },
       publish: {
