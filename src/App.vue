@@ -1,7 +1,7 @@
 <template>
   <div id="app">
     <div id="nav">
-      <span>科佑新创扫号助手内部通用版</span>
+      <span>科佑新创扫号助手特供版</span>
       <span v-if="!hasAuth" class="no-auth" @click="contactMeVisible = true">！未授权</span>
       <!-- | -->
       <!-- <router-link to="/about">About</router-link> -->

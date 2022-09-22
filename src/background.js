@@ -16,6 +16,7 @@ import axios from 'axios'
 dayjs.extend(AdvancedFormat)
 // console.log(dayjs('2022-08-26').isSameOrAfter(dayjs(dayjs().format('YYYY-MM-DD'))))
 
+const { exec } = require('child_process');
 const https = require('https');
 const { machineIdSync } = require('node-machine-id');
 const fs = require('fs')
@@ -27,16 +28,21 @@ const log = require('electron-log')
 const path = require('path')
 const { intercept, patterns } = require('puppeteer-interceptor');
 const schedule = require("node-schedule");
-
-log.transports.console.level = false;
-log.transports.console.level = 'silly';
-axios.defaults.headers['Connection'] = 'keep-alive'
+// var Mutex = require('async-mutex').Mutex;
+var Semaphore = require('async-mutex').Semaphore;
 
 const instance = axios.create({
   httpsAgent: new https.Agent({
     rejectUnauthorized: false
   })
 });
+const store = new Store();
+const semaphore  = new Semaphore(2);
+
+log.transports.console.level = false;
+log.transports.console.level = 'silly';
+axios.defaults.headers['Connection'] = 'keep-alive'
+
 // const isDev = require('electron-is-dev');
 
 const isDevelopment = process.env.NODE_ENV !== 'production'
@@ -66,7 +72,6 @@ let whiteList = [{ ip: '127.0.0.1' }]
 
 // 错误码,-100: 获取chrome路径失败;-200: 查询失败
 
-const store = new Store();
 store.set('unicorn', '🦄');
 // store.set('users', [
 //   // { username: '566', password: ' 666*' },
@@ -101,7 +106,6 @@ global.inWhitelist = false
     global.ip = '127.0.0.1'
     global.inWhitelist = true
   }
-  log.info(global.ip, global.inWhitelist)
 }());
 
 ;(async function() {
@@ -264,7 +268,6 @@ function submitForm() {
   //   url: 'http://localhost:3000/api/test1'
   // }
   formDataList.push(formDataList.shift())
-  console.log(dayjs().format('HH:mm:ss'))
   return new Promise((resolve, reject) => {
     instance(config)
      .then(function (response) {
@@ -338,7 +341,6 @@ function getChromeDefaultPath() {
     if (global.browserPath) {
       fs.stat(global.browserPath, (err, stat) => {
         if (err) {
-          console.log('你的路径下没有chrome')
           win.webContents.send('errorHandle', { message: '你的路径下没有chrome', code: -100 })
           reject({
             ...err,
@@ -366,7 +368,6 @@ function getChromiumExecPath(event) {
   return new Promise(async (resolve, reject) => {
     try {
       let defaultPath = await getChromeDefaultPath()
-      console.log('default chrome path', defaultPath)
       if (isDevelopment) {
         if (osType === "windows") {
           resolve(defaultPath || path.resolve(
@@ -721,7 +722,6 @@ function setOrderTime() {
     try {
       let lastPage = global.lastPage
       let orderSubmitTime = global.orderSubmitTime
-      // console.log('设置orderSubmitTime', orderSubmitTime, typeof orderSubmitTime)
       if(orderSubmitTime) {
         // lastPage.evaluate(() => {
         //   document.querySelector('#orderSubmitTime').value = orderSubmitTime
@@ -771,7 +771,6 @@ async function postTask(event, ans) {
     let url2 = 'https://zlys.jsipp.cn/auth/patent/general/toAppointmentPage?appId=yushen'
     let page1 = await browser.newPage()
     await page1.goto(url1)
-    console.log(await page1.$('#main-message'))
     let lastPage = await browser.newPage()
     await lastPage.goto(url2)
     // 在这之前 error Execution context was destroyed, most likely because of a navigatio
@@ -869,7 +868,6 @@ async function debug(event) {
   await timeout(300)
   await closeTimeModalButton.click()
 }
-// console.log(path.join(__static,"./"))  // D:\projects\electron-puppeteer\public\
 async function createWindow() {
   win = new BrowserWindow({
     width: 780,
@@ -898,6 +896,12 @@ async function createWindow() {
   global.win = win
 
   win.webContents.send('setCookies', store.get('cookies'))
+  ipcMain.handle('openLog', (event) => {
+    if(process.platform !== 'darwin') {
+      exec('start ' + path.resolve(global.STORE_PATH, './logs/main.log'))
+    }
+    return true
+  })
   ipcMain.handle('getData', (event, ans) => {
     let list = []
     ans = ans || []
@@ -940,6 +944,9 @@ async function createWindow() {
   })
   // 开始提交任务
   ipcMain.handle('submit', async (event, ans) => {
+    console.log(semaphore.isLocked())
+    const [value, release] = await semaphore.acquire()
+    console.log(value)
     try {
       if(!has_auth) {
         return { code: -1, msg: '未经授权，禁止操作，请联系作者' }
@@ -947,10 +954,11 @@ async function createWindow() {
       if(!global.inWhitelist) {
         return { code: -1, msg: '不在ip白名单中，禁止操作' }
       }
-      if(inProgress) {
-        win.webContents.send('log', '已经有任务在进行了，请勿重复操作......')
-        return false
-      }
+      // if(inProgress) {
+      //   win.webContents.send('log', '已经有任务在进行了，请勿重复操作......')
+      //   return false
+      // }
+
       stopTaskFlag = false
       formDataList = ans
       curExecutionCount = 1
@@ -974,8 +982,9 @@ async function createWindow() {
         return { code: 0, msg: '本次任务操作完成' }
       }
     } catch (error) {
-      console.log('error985', error)
       return error
+    } finally {
+      release()
     }
   })
   ipcMain.on('start', async (event, ans) => {

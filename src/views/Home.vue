@@ -156,6 +156,7 @@
                 </div>
                 <i class="el-icon-warning-outline"></i>
               </el-tooltip>
+              <span @click="openLog" style="margin-left: 8px;color: #409EFF;cursor: pointer;">打开</span>
             </div>
             <div class="content" id="logContent">
               <ul>
@@ -202,6 +203,7 @@
       </el-tab-pane>
       <el-tab-pane label="使用步骤" name="third">
         <ul>
+          本程序不区分事务所版，企业版，原理都是一样<br />
           使用步骤：
           <li>本工具依然是看脸,不过可以比普通人同时多看几次脸</li>
           <li>1.启动浏览器，拖动滑块登陆过可以在网页中操作，这是抢购方式一，爬虫操作，速度较慢，继续往下</li>
@@ -616,6 +618,9 @@ export default {
           messag: error.message
         })
       }
+    },
+    openLog () {
+      ipcRenderer.invoke('openLog')
     }
   },
   created () {
