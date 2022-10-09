@@ -31,6 +31,7 @@
 </template>
 
 <script>
+import { windowCreate } from '@/plugins'
 const { ipcRenderer, remote } = require('electron')
 
 export default {
@@ -47,6 +48,18 @@ export default {
     }
   },
   methods: {
+    handleNewWin1 () {
+      windowCreate({
+        title: '管理页面',
+        route: '/changelog',
+        width: 1000,
+        height: 750,
+        backgroundColor: '#f9f9f9',
+        resizable: true,
+        modal: true,
+        maximize: true
+      })
+    },
     async getData () {
       try {
         const codeList = remote.getGlobal('machineIdList')

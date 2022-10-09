@@ -12,6 +12,7 @@ import axios from 'axios'
 // import run from './utils/run'
 // import api from '@/lib/api'
 // require('@electron/remote/main').initialize()      // electron 10.0以下版本不兼容
+import { Window } from './windows.js'
 
 dayjs.extend(AdvancedFormat)
 // console.log(dayjs('2022-08-26').isSameOrAfter(dayjs(dayjs().format('YYYY-MM-DD'))))
@@ -123,7 +124,6 @@ async function checkMachineAuth() {
     has_auth = false
     throw error
   }
-  win.webContents.send('checkAuth', has_auth)
 }
 let checkAuthJob = schedule.scheduleJob('00 58 10 * * *', async function () {
   await checkMachineAuth()
@@ -218,7 +218,7 @@ async function submitFormSerially() {
       inProgress = false
     } else {
       if(curExecutionCount > executionParams.limit) {
-        log.info(`本次任务${executionParams.limit}条，成功数量：${executionSuccessCount}，失败数量：${executionParams.limit - executionSuccessCount}`)
+        log.info(`本次任务${executionParams.limit}条，成功数量：${executionSuccessCount}，失败数量：${executionParams.limit - executionSuccessCount}\n`)
         curExecutionCount = 1
         executionSuccessCount = 0
         inProgress = false
@@ -298,7 +298,7 @@ function submitForm() {
      }).finally(() => {
         if(curExecutionCount === executionParams.limit) {
           inProgress = false
-          log.info(`本次任务${executionParams.limit}条，成功数量：${executionSuccessCount}，失败数量：${executionParams.limit - executionSuccessCount}`)
+          log.info(`本次任务${executionParams.limit}条，成功数量：${executionSuccessCount}，失败数量：${executionParams.limit - executionSuccessCount}\n`)
         }
      })
 
@@ -619,6 +619,11 @@ function validateForm() {
   return new Promise(async (resolve, reject) => {
     try {
       let lastPage = global.lastPage
+      if(!lastPage) {
+        win.webContents.send('log', '检测到页面已经关闭')
+        resolve(2)
+        return
+      }
       let res = await Promise.all([
         lastPage.$eval('.layui-form .layui-form-item:nth-child(1) input[name="patentName"]', el => el.value),
         lastPage.$eval('.layui-form .layui-form-item:nth-child(2) input[type="text"]', el => el.value),
@@ -791,7 +796,7 @@ async function postTask(event, ans) {
     await lastPage.waitForSelector('#onSubmit', { timeout: 3000 })
 
     let checkRes = await interval(validateForm, 20000, 50000)
-    if(checkRes) {
+    if(checkRes === 1) {
       // 要先点击按钮触发一次，否则此promise 出于pendding
       interceptOrderData()    // 拦截一次就够了, 如果await 由于没有拦截时内部没有reolve或reject导致处于pendding
       // await lastPage.waitForSelector('.layui-btn[onclick="cardNumber()"]', { visible: true })
@@ -868,33 +873,38 @@ async function debug(event) {
   await timeout(300)
   await closeTimeModalButton.click()
 }
+
 async function createWindow() {
-  win = new BrowserWindow({
-    width: 780,
-    height: 760,
-    resizable: false,
-    icon: path.join(__static, "./icon64.ico"),
-    webPreferences: {
-      // Use pluginOptions.nodeIntegration, leave this alone
-      // See nklayman.github.io/vue-cli-plugin-electron-builder/guide/security.html#node-integration for more info
-      nodeIntegration: process.env.ELECTRON_NODE_INTEGRATION,
-      enableRemoteModule: true
-    }
-  })
+  // win = new BrowserWindow({
+  //   width: 780,
+  //   height: 760,
+  //   resizable: false,
+  //   icon: path.join(__static, "./icon64.ico"),
+  //   webPreferences: {
+  //     // Use pluginOptions.nodeIntegration, leave this alone
+  //     // See nklayman.github.io/vue-cli-plugin-electron-builder/guide/security.html#node-integration for more info
+  //     nodeIntegration: process.env.ELECTRON_NODE_INTEGRATION,
+  //     enableRemoteModule: true
+  //   }
+  // })
+
+  // if (process.env.WEBPACK_DEV_SERVER_URL) {     // http://localhost:8080/
+  //   // Load the url of the dev server if in development mode
+  //   await win.loadURL(process.env.WEBPACK_DEV_SERVER_URL)
+  //   if (!process.env.IS_TEST) win.webContents.openDevTools()
+  // } else {
+  //   createProtocol('app')
+  //   // Load the index.html when not in development
+  //   win.loadURL('app://./index.html')
+  // }
+  let window = new Window()
+  window.listen()
+  window.createWindows({ isMainWin: true, width: 780, height: 760})
+  win = window.main
+
   // 注册更新检查
   Update(win, log);
-
-  if (process.env.WEBPACK_DEV_SERVER_URL) {     // http://localhost:8080/
-    // Load the url of the dev server if in development mode
-    await win.loadURL(process.env.WEBPACK_DEV_SERVER_URL)
-    if (!process.env.IS_TEST) win.webContents.openDevTools()
-  } else {
-    createProtocol('app')
-    // Load the index.html when not in development
-    win.loadURL('app://./index.html')
-  }
   global.win = win
-
   win.webContents.send('setCookies', store.get('cookies'))
   ipcMain.handle('openLog', (event) => {
     if(process.platform !== 'darwin') {
@@ -936,9 +946,9 @@ async function createWindow() {
     if (!has_auth) {
       return { code: -1, msg: '未经授权，禁止操作，请联系作者' }
     }
-    if(!global.inWhitelist) {
-      return { code: -1, msg: '不在ip白名单中，禁止操作' }
-    }
+    // if(!global.inWhitelist) {
+    //   return { code: -1, msg: '不在ip白名单中，禁止操作' }
+    // }
     executionParams = ans
     return true
   })
@@ -951,9 +961,9 @@ async function createWindow() {
       if(!has_auth) {
         return { code: -1, msg: '未经授权，禁止操作，请联系作者' }
       }
-      if(!global.inWhitelist) {
-        return { code: -1, msg: '不在ip白名单中，禁止操作' }
-      }
+      // if(!global.inWhitelist) {
+      //   return { code: -1, msg: '不在ip白名单中，禁止操作' }
+      // }
       // if(inProgress) {
       //   win.webContents.send('log', '已经有任务在进行了，请勿重复操作......')
       //   return false
@@ -996,13 +1006,13 @@ async function createWindow() {
         })
         return
       }
-      if(!global.inWhitelist) {
-        win.webContents.send('message', {
-          type: 'error',
-          message: '不在ip白名单中，禁止操作'
-        })
-        return false
-      }
+      // if(!global.inWhitelist) {
+      //   win.webContents.send('message', {
+      //     type: 'error',
+      //     message: '不在ip白名单中，禁止操作'
+      //   })
+      //   return false
+      // }
       // 都有效果
       event.sender.send('log', '正在为您初始化页面，将自动登录账号，但是需要自己拖动滑块；如果出错了没有打开最终预约页面，需要自己导入cookies，教程：http://cdn.qdovo.com/doudou.gif')
       // win.webContents.send('log', '正在为您初始化页面，将自动登录账号，但是需要自己拖动滑块')
@@ -1076,13 +1086,13 @@ async function createWindow() {
       })
       return false
     }
-    if(!global.inWhitelist) {
-      win.webContents.send('message', {
-        type: 'error',
-        message: '不在ip白名单中，禁止操作'
-      })
-      return false
-    }
+    // if(!global.inWhitelist) {
+    //   win.webContents.send('message', {
+    //     type: 'error',
+    //     message: '不在ip白名单中，禁止操作'
+    //   })
+    //   return false
+    // }
     stopTask()
   })
   // 数据持久化
@@ -1145,6 +1155,9 @@ if (isDevelopment) {
 process.on('unhandledRejection', (reason, promise) => {
   const { code } = reason
   if (code === -100) return
+  console.error(reason)
   log.error('Unhandled Rejection:', reason.message || '系统异常')
-  win.webContents.send('errorHandle', reason)
+  if(win && win.webContents) {
+    win.webContents.send('errorHandle', reason)
+  }
 })
