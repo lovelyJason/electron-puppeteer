@@ -30,7 +30,8 @@ const path = require('path')
 const { intercept, patterns } = require('puppeteer-interceptor');
 const schedule = require("node-schedule");
 // var Mutex = require('async-mutex').Mutex;
-var Semaphore = require('async-mutex').Semaphore;
+const Semaphore = require('async-mutex').Semaphore;
+const cheerio = require('cheerio')
 
 const instance = axios.create({
   httpsAgent: new https.Agent({
@@ -62,6 +63,7 @@ let webPageTimerId = null
 let inProgress = false
 let has_auth = false
 let whiteList = [{ ip: '127.0.0.1' }]
+let home_page_cookies = []
 
 // let rule = new schedule.RecurrenceRule();
 // 毫秒无效， 当秒间隔时间加上当前时间大于60的时候不会生效
@@ -210,7 +212,7 @@ async function submitFormSerially() {
     if(code === 0) {
       win.webContents.send('message', {
         type: 'success',
-        message: '恭喜您，预约成功 --- ' + dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data)
+        message: '恭喜您，预约成功 --- ' + dayjs().format('HH:mm:ss')
       })
       win.webContents.send('log', '第' + curExecutionCount + '次执行：' + dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data) + '预约成功，即刻终止任务')
       curExecutionCount = 1
@@ -262,31 +264,30 @@ function submitForm() {
     },
     data: data
   }
-  // TODO:
-  // config = {
-  //   method: 'get',
-  //   url: 'http://localhost:3000/api/test1'
-  // }
   formDataList.push(formDataList.shift())
   return new Promise((resolve, reject) => {
     instance(config)
      .then(function (response) {
-       //  {"msg":"请选择预约日期!!","code":-1,"success":false}
-       log.info('接口调用成功', JSON.stringify(response.data));
-       win.webContents.send('log', '第' + curExecutionCount + '次执行：' + dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data))
-       const { code } = response.data
-       executionSuccessCount++
-       if(code == 0) {  // 提交成功
-        inProgress = false
-        win.webContents.send('message', {
-          type: 'success',
-          message: '恭喜您，预约成功 --- ' + dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data)
-        })
-        clearInterval(global.taskTimerId)
-        resolve(1)
-       } else { // 提交失败，如余额不足
-         resolve(0)
-       }
+        //  {"msg":"请选择预约日期!!","code":-1,"success":false}
+        log.info('接口调用成功', JSON.stringify(response.data));
+        win.webContents.send('log', '第' + curExecutionCount + '次执行：' + dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data))
+        const { code } = response.data
+        curExecutionCount++
+        executionSuccessCount++
+        if(code == 0) {  // 提交成功
+          inProgress = false
+          win.webContents.send('message', {
+            type: 'success',
+            message: '恭喜您，预约成功 --- ' + dayjs().format('HH:mm:ss')
+          })
+        }
+        if(curExecutionCount > executionParams.limit) {
+          inProgress = false
+          log.info(`本次任务${executionParams.limit}条，成功数量：${executionSuccessCount}，失败数量：${executionParams.limit - executionSuccessCount}\n`)
+          resolve(2)
+        } else {
+          resolve(0)
+        }
 
      }).catch(function (error) {
         log.error('接口调用错误', error.message);  // 404，504， 如果回应时间较长，可能长时间没有回应，但是定时器执行多次
@@ -294,11 +295,6 @@ function submitForm() {
         if(error.message.includes('404')) {
           inProgress = false
           reject(error)
-        }
-     }).finally(() => {
-        if(curExecutionCount === executionParams.limit) {
-          inProgress = false
-          log.info(`本次任务${executionParams.limit}条，成功数量：${executionSuccessCount}，失败数量：${executionParams.limit - executionSuccessCount}\n`)
         }
      })
 
@@ -603,11 +599,11 @@ async function shot(page, imgSelector, type = "png", ifAddPrefix) {
 
 const loginCheck = async () => {
   let page = global.page
-  let res = await page.evaluate(() => {
+  await page.evaluate(() => {
    return document.querySelector('.navContent-loginUser') && document.querySelector('.navContent-loginUser').innerHTML
  })
  // 这里如果不return， 那么一直会是undefined， 虽然是会阻塞执行，但没有返回值
- return res
+ return 1
 }
 
 if (!isDevelopment) {
@@ -621,9 +617,11 @@ function validateForm() {
       let lastPage = global.lastPage
       if(!lastPage) {
         win.webContents.send('log', '检测到页面已经关闭')
-        resolve(2)
+        resolve(1)
         return
       }
+      // 抓取网页端数据回填
+      fetchDataFromPage()
       let res = await Promise.all([
         lastPage.$eval('.layui-form .layui-form-item:nth-child(1) input[name="patentName"]', el => el.value),
         lastPage.$eval('.layui-form .layui-form-item:nth-child(2) input[type="text"]', el => el.value),
@@ -768,6 +766,30 @@ function setOrderTime() {
     }
   })
 }
+
+async function fetchDataFromPage() {
+  let lastPage = global.lastPage
+  let formHtml = await lastPage.$eval('.layui-form', el => el.innerHTML)
+  const $ = cheerio.load(formHtml, { ignoreWhitespace: true, });
+  let companyList = $('.layui-form-item:nth-child(2) select[name="applyCompanyId"] option').map(function() {
+    return {
+      label: $(this).text().trim(),
+      value: $(this).attr('value')
+    }
+  }).toArray().filter(val => val.value)
+  let typeList = $('select[name="typeCode"] option').map(function() {
+    return {
+      label: $(this).text().trim(),
+      value: $(this).attr('value')
+    }
+  }).toArray().filter(val => val.value)
+
+  win.webContents.send('setForm', {
+    companyList,
+    typeList
+  })
+}
+
 async function postTask(event, ans) {
   try {
     // 获取一个加密参数，目前看来是hardcode的
@@ -778,6 +800,9 @@ async function postTask(event, ans) {
     await page1.goto(url1)
     let lastPage = await browser.newPage()
     await lastPage.goto(url2)
+    lastPage.evaluate(() => {
+      layer.msg('不好意思，你的网站已经被我攻入', {icon: 6, time: 6000});
+    })
     // 在这之前 error Execution context was destroyed, most likely because of a navigatio
     win.webContents.send('log', '正在为您导航至最终页面，请自行填写除预约时间以外的表单信息，之后，本程序会开启定时任务自动为您提交；同时，您也可在本客户端直接开始提交，速度会更快')
     lastPage.on('close', () => {
@@ -790,12 +815,11 @@ async function postTask(event, ans) {
     store.set('cookies', submit_cookie)
     win.webContents.send('setCookies', submit_cookie)
     // store.set('cookies', cookies)
-    // 回填数据
-
     // win.webContents.send('log', 'cookies抓取成功：' + JSON.stringify(cookies))
     await lastPage.waitForSelector('#onSubmit', { timeout: 3000 })
 
-    let checkRes = await interval(validateForm, 20000, 50000)
+    fetchDataFromPage()
+    let checkRes = await interval(validateForm, 10000, 100000)
     if(checkRes === 1) {
       // 要先点击按钮触发一次，否则此promise 出于pendding
       interceptOrderData()    // 拦截一次就够了, 如果await 由于没有拦截时内部没有reolve或reject导致处于pendding
@@ -980,7 +1004,7 @@ async function createWindow() {
           return submitForm()
         }, executionParams.executionFrequency || 800, executionParams.limit, function(timerId, count) {
           global.taskTimerId = timerId
-          curExecutionCount = count
+          // curExecutionCount = count
         })
         if(res) {
           return { code: 0, msg: '本次任务操作完成' }

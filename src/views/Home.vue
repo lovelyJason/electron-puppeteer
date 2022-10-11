@@ -232,12 +232,19 @@
           <el-input v-model="caseForm.patentName"></el-input>
         </el-form-item>
         <el-form-item class="text-left flex" label="申请主体" prop="applyCompanyId">
-          <el-select ref="applyCompany" v-model="caseForm.applyCompanyId" placeholder=""  @change="onApplyCompanyChange">
-            <el-option label="江苏瑞耀纤维科技有限公司" value="aba8a1af48dc423cb74b98ee2766ac31"></el-option>
+          <el-select filterable ref="applyCompany" placeholder="打开预约网页自动抓取列表" v-model="caseForm.applyCompanyId"  @change="onApplyCompanyChange">
+            <!-- <el-option label="江苏瑞耀纤维科技有限公司" value="aba8a1af48dc423cb74b98ee2766ac31"></el-option>
             <el-option label="无锡维邦工业设备成套技术有限公司" value="3f99d86ac20845a785983f63b14c08da"></el-option>
             <el-option label="仪征市龙港机械制造有限公司" value="c8ab5aa31190414088fff2a1ea13892a"></el-option>
             <el-option label="创志科技（江苏）股份有限公司" value="a156798510c34539a4f67785895fe6ea"></el-option>
-            <el-option label="常州江苏大学工程技术研究院" value="02ab8a2756234cce9f01107494e53de5"></el-option>
+            <el-option label="常州江苏大学工程技术研究院" value="02ab8a2756234cce9f01107494e53de5"></el-option> -->
+            <el-option
+              v-for="company in companyList"
+              :key="company.value"
+              :label="company.label"
+              :value="company.value"
+            >
+            </el-option>
           </el-select>
         </el-form-item>
         <el-form-item class="text-left flex" label="联系方式" prop="appointPhone">
@@ -245,16 +252,31 @@
         </el-form-item>
         <el-form-item class="text-left flex" label="专利类型" prop="typeCode">
           <el-select v-model="caseForm.typeCode" placeholder="" ref="type">
-            <el-option label="发明" value="1"></el-option>
+            <!-- <el-option label="发明" value="1"></el-option>
             <el-option label="实用新型" value="2"></el-option>
-            <el-option label="外观设计" value="3"></el-option>
+            <el-option label="外观设计" value="3"></el-option> -->
+            <el-option
+              v-for="company in typeList"
+              :key="company.value"
+              :label="company.label"
+              :value="company.value"
+            >
+            </el-option>
           </el-select>
         </el-form-item>
         <el-form-item class="text-left flex" label="分类号" prop="applyClassifyCode">
           <el-input v-model="caseForm.applyClassifyCode"></el-input>
         </el-form-item>
         <el-form-item class="text-left flex" label="预约时间" prop="orderSubmitTime">
-          <el-input v-model="caseForm.orderSubmitTime" placeholder="格式如：2022-08-29"></el-input>
+          <!-- <el-input v-model="caseForm.orderSubmitTime" placeholder="格式如：2022-08-29"></el-input> -->
+          <el-date-picker
+            v-model="caseForm.orderSubmitTime"
+            type="date"
+            placeholder="选择日期"
+            :picker-options="pickerOptions"
+            value-format="yyyy-MM-dd"
+          >
+          </el-date-picker>
         </el-form-item>
       </el-form>
       <div slot="footer">
@@ -327,7 +349,7 @@ export default {
         applyCompanyId: '',
         // applyCompanyName: '',
         appointPhone: '',
-        typeCode: '1',
+        typeCode: '',
         applyClassifyCode: '',
         orderSubmitTime: ''
       },
@@ -346,7 +368,14 @@ export default {
       caseFormType: 'add',
       editCaseFormIdex: '0',
       ip: '',
-      inWhitelist: false
+      inWhitelist: false,
+      companyList: [],
+      typeList: [],
+      pickerOptions: {
+        disabledDate (time) {
+          return time.getTime() < Date.now()
+        }
+      }
     }
   },
   computed: {
@@ -398,33 +427,38 @@ export default {
       ipcRenderer.invoke('open-config')
     },
     setCase () {
-      const { patentName, applyCompanyId, appointPhone, typeCode, applyClassifyCode, orderSubmitTime } = this.caseForm
-      console.log(patentName)
-      const formData = {
-        patentName,
-        appId: 'yushen',
-        applyFieldId: '3887f4dbf7fe4097903ce8055ba24496', // 以下三个一体 hardcode
-        applyFieldCode: '2', // hardcode
-        applyFieldName: '新型功能和结构材料', // hardcode
-        applyCompanyId,
-        applyCompanyName: this.$refs.applyCompany.selectedLabel,
-        appointPhone,
-        typeCode,
-        typeText: this.$refs.type.selectedLabel,
-        applyClassifyCode,
-        orderSubmitTime,
-        executionFrequency: Number.parseInt(this.executionFrequency)
-      }
-      if (this.caseFormType === 'add') {
-        this.tableData.push({ ...formData })
-      } else {
-        this.$set(this.tableData, this.editCaseFormIdex, formData)
-      }
-      this.caseFormVisible = false
-      ipcRenderer.invoke('setData', [{
-        key: 'caseList',
-        value: this.tableData
-      }])
+      console.log(this.caseForm)
+      this.$refs.ruleForm.validate((valid) => {
+        if (valid) {
+          const { patentName, applyCompanyId, appointPhone, typeCode, applyClassifyCode, orderSubmitTime } = this.caseForm
+          console.log(patentName)
+          const formData = {
+            patentName,
+            appId: 'yushen',
+            applyFieldId: '3887f4dbf7fe4097903ce8055ba24496', // 以下三个一体 hardcode
+            applyFieldCode: '2', // hardcode
+            applyFieldName: '新型功能和结构材料', // hardcode
+            applyCompanyId,
+            applyCompanyName: this.$refs.applyCompany.selectedLabel,
+            appointPhone,
+            typeCode,
+            typeText: this.$refs.type.selectedLabel,
+            applyClassifyCode,
+            orderSubmitTime,
+            executionFrequency: Number.parseInt(this.executionFrequency)
+          }
+          if (this.caseFormType === 'add') {
+            this.tableData.push({ ...formData })
+          } else {
+            this.$set(this.tableData, this.editCaseFormIdex, formData)
+          }
+          this.caseFormVisible = false
+          ipcRenderer.invoke('setData', [{
+            key: 'caseList',
+            value: this.tableData
+          }])
+        }
+      })
     },
     handleClose () {
       this.caseFormVisible = false
@@ -628,6 +662,16 @@ export default {
     setTimeout(async () => {
       this.getData()
     }, 1000)
+    ipcRenderer.on('setForm', (event, ans) => {
+      if (typeof ans === 'object' && ans != null) {
+        for (const key in ans) {
+          this[key] = ans[key]
+        }
+        if (!this.caseForm.typeCode) {
+          this.caseForm.typeCode = this.typeList.length ? this.typeList[0].value : ''
+        }
+      }
+    })
     ipcRenderer.on('log', (event, ans) => {
       this.logs.push(ans)
     })

@@ -88,7 +88,7 @@ const interval = function (p, delay, limit, cb) {
           cb(timerId, count)
         }
         const res = await p()
-        if (res) {
+        if (res === 1) {
           // 执行结果如果达到效果，可以清除定时器
           clearInterval(timerId)
           resolve(1)

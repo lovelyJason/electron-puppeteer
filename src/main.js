@@ -25,7 +25,8 @@ import {
   MessageBox,
   Tabs,
   TabPane,
-  Tooltip
+  Tooltip,
+  DatePicker
 } from 'element-ui'
 import UmyUi from 'umy-ui'
 import 'umy-ui/lib/theme-chalk/index.css'
@@ -54,6 +55,7 @@ Vue.use(UmyUi)
 Vue.use(Tabs)
 Vue.use(TabPane)
 Vue.use(Tooltip)
+Vue.use(DatePicker)
 
 Vue.prototype.$message = Message
 Vue.prototype.$loading = Loading.service
