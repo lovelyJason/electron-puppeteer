@@ -4,6 +4,39 @@
       <ul class="met-log-list list-unstyled pl-md-5 ml-md-5">
         <h2 class="d-inline-block my-2 pl-3 pl-md-0">2022</h2>
         <li class="position-relative pl-3 pl-md-4 py-3 py-md-4">
+          <h3 class="h6 position-absolute text-muted">2022.10.12</h3>
+          <span
+            class="rounded-circle p-1 position-absolute bg-white text-center font-weight-bold"
+            >·</span
+          >
+          <dl class="mb-0">
+            <dt><h4 class="h5">科佑新创扫号助手特供版(专属) 0.1.5 更新日志</h4></dt>
+            <dd class="card p-3 mb-0 mt-3 bg-light oya met-scrollbar">
+              <div class="met-editor font-size-14 text-muted">
+                <p>1.省局提交预约增加验证码，批量破解验证码；</p>
+                <p>2.其他一些优化；</p>
+              </div>
+            </dd>
+          </dl>
+        </li>
+        <li class="position-relative pl-3 pl-md-4 py-3 py-md-4">
+          <h3 class="h6 position-absolute text-muted">2022.10.12</h3>
+          <span
+            class="rounded-circle p-1 position-absolute bg-white text-center font-weight-bold"
+            >·</span
+          >
+          <dl class="mb-0">
+            <dt><h4 class="h5">科佑新创扫号助手特供版(专属) 0.1.4 更新日志</h4></dt>
+            <dd class="card p-3 mb-0 mt-3 bg-light oya met-scrollbar">
+              <div class="met-editor font-size-14 text-muted">
+                <p>1.预约成功时的日志补充以及提示；</p>
+                <p>2.顺序执行优化；</p>
+                <p>3.终止任务的同时中断所有请求；</p>
+              </div>
+            </dd>
+          </dl>
+        </li>
+        <li class="position-relative pl-3 pl-md-4 py-3 py-md-4">
           <h3 class="h6 position-absolute text-muted">2022.10.11</h3>
           <span
             class="rounded-circle p-1 position-absolute bg-white text-center font-weight-bold"

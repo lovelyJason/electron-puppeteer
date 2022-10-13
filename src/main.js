@@ -26,7 +26,9 @@ import {
   Tabs,
   TabPane,
   Tooltip,
-  DatePicker
+  Popover,
+  DatePicker,
+  Notification
 } from 'element-ui'
 import UmyUi from 'umy-ui'
 import 'umy-ui/lib/theme-chalk/index.css'
@@ -55,6 +57,7 @@ Vue.use(UmyUi)
 Vue.use(Tabs)
 Vue.use(TabPane)
 Vue.use(Tooltip)
+Vue.use(Popover)
 Vue.use(DatePicker)
 
 Vue.prototype.$message = Message
@@ -64,6 +67,7 @@ Vue.prototype.$msgbox = MessageBox
 Vue.prototype.$alert = MessageBox.alert
 Vue.prototype.$confirm = MessageBox.confirm
 Vue.prototype.$prompt = MessageBox.prompt
+Vue.prototype.$notify = Notification
 
 new Vue({
   router,

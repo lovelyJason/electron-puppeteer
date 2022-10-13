@@ -1,7 +1,7 @@
 <template>
   <div id="app">
     <div id="nav">
-      <span>科佑新创扫号助手特供版</span>
+      <span>科佑新创扫号助手特供版{{ version }}</span>
       <span v-if="!hasAuth" class="no-auth" @click="contactMeVisible = true">！未授权</span>
       <!-- | -->
       <!-- <router-link to="/about">About</router-link> -->
@@ -19,8 +19,9 @@
     >
       <div>
         <img width="300" src="@/assets/images/wechat.jpg" alt=""> <br />
-        <span class="user-select">
+        <span>
           {{ machineId }}
+          <i @click="copyMachineId" style="cursor: pointer;margin-left: 6px;" class="el-icon-copy-document"></i>
         </span>
       </div>
       <div slot="footer">
@@ -31,8 +32,9 @@
 </template>
 
 <script>
+import config from '../package.json'
 import { windowCreate } from '@/plugins'
-const { ipcRenderer, remote } = require('electron')
+const { ipcRenderer, remote, clipboard } = require('electron')
 
 export default {
   data () {
@@ -45,9 +47,19 @@ export default {
   computed: {
     machineId () {
       return remote.getGlobal('machineId')
+    },
+    version () {
+      return config.version
     }
   },
   methods: {
+    copyMachineId () {
+      clipboard.writeText(this.machineId)
+      this.$message({
+        type: 'success',
+        message: '已复制到剪切板'
+      })
+    },
     handleNewWin1 () {
       windowCreate({
         title: '管理页面',
