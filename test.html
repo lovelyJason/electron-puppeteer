@@ -1,0 +1,74 @@
+<html>
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <style type="text/css">
+    body,
+    html {
+      width: 100%;
+      text-align: center;
+    }
+
+    #picyzm {
+      width: 100px;
+      height: 40px;
+      display: inline-block;
+      margin: 0 30px;
+    }
+
+    #verifyCodeDemo {
+      width: 100%;
+      display: flex;
+      margin-top: 200px;
+      justify-content: center;
+    }
+
+    #btn {
+      margin: 30px auto;
+      background-color: blue;
+      color: #fff;
+      border-radius: 5px;
+      border: 0;
+      width: 100px;
+      height: 40px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="verifyCodeDemo">
+    <input type="text" id="code_input" placeholder="在这个框里输入验证码">
+    <p id="picyzm"></p>
+  </div>
+  <input type="button" value="验证" id="btn">
+  <script src="./src/lib/gVerify.js.js"></script>
+  <script type="text/javascript">
+    //初始化验证码
+    var verifyCode = new GVerify({
+      id: "picyzm",
+      type: "blend"
+    });
+    //点击按钮验证
+    var code = document.getElementById("code_input");
+    var btn = document.getElementById("btn");
+    btn.onclick = function () {
+      var res = verifyCode.validate(code.value);
+      if (res) {
+        alert("验证通过");
+      } else {
+        alert("验证码错误");
+      }
+    }
+    function fn() {
+      return new Promise(() => {console.log('init')})
+    }
+    async function main() {
+      let f1 = await fn()
+      console.log(f1)
+      console.log('fn promise end')
+    }
+    main()
+  </script>
+</body>
+
+</html>

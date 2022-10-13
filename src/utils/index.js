@@ -1,6 +1,8 @@
 const xlsx = require('node-xlsx')
-var Excel = require('exceljs')
-var workbook = new Excel.Workbook()
+const Excel = require('exceljs')
+const workbook = new Excel.Workbook()
+const http = require('http')
+const https = require('https')
 
 function isNumber (value) {
   if (value === '' || value === null) return false // 空字符串,空格,null会按照0处理
@@ -83,12 +85,13 @@ const interval = function (p, delay, limit, cb) {
     const timerId = setInterval(async () => {
       try {
         count++
+        // console.log('count', count)
         // console.log('开启定时任务')
         if (typeof cb === 'function') {
           cb(timerId, count)
         }
         const res = await p()
-        if (res) {
+        if (res === 1) {
           // 执行结果如果达到效果，可以清除定时器
           clearInterval(timerId)
           resolve(1)
@@ -107,11 +110,48 @@ const interval = function (p, delay, limit, cb) {
     }, delay)
   })
 }
+function isToday (str) {
+  if (new Date(str).toDateString() === new Date().toDateString()) {
+    return true
+  }
+}
+function processID () {
+  const uuid = 'xxxxxxxx-xxxx-xxxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    const r = Math.random() * 16 | 0
+    const v = c === 'x' ? r : (r & 0x3 | 0x8)
+    return v.toString(16)
+  })
+  return uuid
+}
+
+// 图片有防盗,直接请求不了,需要传入cookie,且浏览器如果刷新了这个图片,cookie也会更新
+function getImgBase64Data (url) {
+  const api = url.startsWith('https') ? https : http
+  return new Promise((resolve, reject) => {
+    api.get(url, function (res) {
+      var chunks = []
+      var size = 0
+      res.on('data', function (chunk) {
+        chunks.push(chunk)
+        size += chunk.length
+      })
+      res.on('end', function () {
+        var data = Buffer.concat(chunks, size)
+        var base64Img = data.toString('base64')
+        // resolve(`data:image/jpeg;base64,${base64Img}`)
+        resolve(base64Img)
+      })
+    })
+  })
+}
 
 module.exports = {
   parseExcel,
   isNumber,
   insertDataFromExcel,
   timeout,
-  interval
+  interval,
+  isToday,
+  processID,
+  getImgBase64Data
 }

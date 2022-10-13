@@ -65,17 +65,11 @@
                   </el-button> -->
                   <el-button
                     type="danger"
-                    @click="stopTask"
+                    @click="closeBrowser"
                   >
                     停止浏览器
                   </el-button>
-                  <el-button
-                    v-if="isDev"
-                    type="primary"
-                    @click="destroySoft"
-                  >
-                    销毁
-                  </el-button>
+
                 </div>
               </el-form>
             </div>
@@ -91,7 +85,7 @@
                       <i class="el-icon-warning-outline"></i>
                     </el-tooltip>
                   </template>
-                  <el-input v-model="execution.limit"></el-input>
+                  <el-input @blur="onExecutionLimitBlur" v-model="execution.limit"></el-input>
                 </el-form-item>
                 <el-form-item>
                   <template slot="label">
@@ -118,7 +112,7 @@
                     <el-tooltip effect="light" placement="bottom">
                       <div slot="content">
                         <ul>
-                          <li>串行：等待当前单据预约成功或者失败，才会开始预约下一个</li>
+                          <li>串行：等待当前单据预约成功或者失败结果出来后，才会开始预约下一个；并且预约成功会从队列移除，不会重复</li>
                           <li>并行：会对当前所有的单据列表，以设定频率循环按顺序执行，执行完最后一个时再从头执行</li>
                           <br />
                           两种方案各有取舍，自行测试
@@ -156,10 +150,11 @@
                 </div>
                 <i class="el-icon-warning-outline"></i>
               </el-tooltip>
+              <span @click="openLog" style="margin-left: 8px;color: #409EFF;cursor: pointer;">打开</span>
             </div>
             <div class="content" id="logContent">
               <ul>
-                <li v-for="(log, index) in logs" :key="index">{{ log }}</li>
+                <li v-for="(log, index) in logs" :key="index" v-html="log"></li>
               </ul>
               <span class="clear-log" @click="logs = []">清空</span>
             </div>
@@ -171,10 +166,12 @@
           <router-link to="/changelog" class="update-log-a">
             <div class="update-log"><i  style="margin-right: 6px;" class="el-icon-chat-line-round"></i>更新日志</div>
           </router-link>
+          <span class="ym-balance">
+            云码余额：{{ score }}
+          </span>
           <span class="ip">
             <span>IP: {{ ip }}</span>
-            <i v-if="inWhitelist" style="margin-left: 6px;" class="el-icon-circle-check"></i>
-            <i v-else style="margin-left: 6px;" class="el-icon-circle-close"></i>
+            <i style="margin-left: 6px;" class="el-icon-circle-check"></i>
           </span>
 
         </div>
@@ -184,6 +181,12 @@
         <el-button type="primary" @click="openConfig">导入/编辑单据</el-button>
         <el-table :data="tableData" border style="width: 100%;margin-top: 12px;margin-bottom: 12px;">
           <el-table-column prop="patentName" label="案件名称" width="110">
+            <template slot-scope="scope">
+              {{ scope.row.patentName }}
+              <el-popover v-if="scope.row.status === 1" trigger="hover" effect="light" content="成功预约" placement="top">
+                <i slot="reference" class="el-icon-finished" style="color: green;font-size: 16px;"></i>
+              </el-popover>
+            </template>
           </el-table-column>
           <el-table-column prop="applyCompanyName" label="申请主体" width="110">
           </el-table-column>
@@ -202,19 +205,19 @@
       </el-tab-pane>
       <el-tab-pane label="使用步骤" name="third">
         <ul>
+          本程序不区分事务所版，企业版，原理都是一样<br />
           使用步骤：
           <li>本工具依然是看脸,不过可以比普通人同时多看几次脸</li>
           <li>1.启动浏览器，拖动滑块登陆过可以在网页中操作，这是抢购方式一，爬虫操作，速度较慢，继续往下</li>
           <li>2.在本客户端输入表单信息，或者在网页输入，会自动同步到此，预约时间你选任意合法格式</li>
           <li>3.点击《开始》按钮，会直接并发提交数据，不经过网页端，但也可能会失败;如果失败原因是网络错误，网站崩溃,会继续执行直到有结果；如果失败原因是余额不足等错误，会继续按照执行频率循环执行，直到达到你设置的执行上限则结束运行</li>
           <li>如果任务启动后卡住不动没有输出日志，大概率是504，省局崩溃</li>
-          <li>串行/并行模式：串行是等待第一个案子预约结果成功或失败才会开启下一轮，并行是单张或多张单据按照设定的频率即时间间隔循环执行；建议填写多张单据，并在放号之前1到2秒开始执行，并控制好次数，没到放号之前的请求必然是无效；填写多张单据时，执行任务会轮流提交不同的案子，减少相同案子重复预约成功的概率。<span style="color: #bb7373;">不管是串行或者并行，建议填写多个案子，并选择不同日期，提高不同日期的预约成功率，同时，只要有一个预约成功，会即可终止任务，但是不代表并行模式下只会成功一个！！！</span></li>
-          <li>不要连续点击多次开始，要重新开始时请先停止</li>
+          <li>串行/并行模式：串行是等待第一个案子预约结果成功或失败才会开启下一轮，并行是单张或多张单据按照设定的频率即时间间隔循环执行；建议填写多张单据，并在放号之前1到2秒开始执行，并控制好次数，没到放号之前的请求必然是无效；填写多张单据时，执行任务会轮流提交不同的案子，减少相同案子重复预约成功的概率。<span style="color: #bb7373;">需要注意的是，串行模式下预约成功后会把那一条单据移除掉，确保不会预约重复；如果是并行模式下，因为一瞬间执行了很多条，已经在提交当中的撤回不了，因此在本轮请求尚未结束之前，有可能预约到重复，需要自己控制频率，时机。</span></li>
+          <li>目前多次点击开始任务也可，但是队列中一次只会执行两条任务，可以理解为多线程，防止疯狂点击。停止的时候也只会停止当前队列中的任务，比如连续三次开始，点击一次停止只会停止两条任务，再点击停止会停止掉最后一条任务</li>
           <br />
           待开发功能：
           <li>1.执行中如果发现执行结束后仍然未发现有余额，则自动切换日期</li>
-          <li>2.目前串行模式最多只会成功预约上一个，先看看效果</li>
-          <li>3.将来支持多cookies导入，同一次可登录多账号操作</li>
+          <li>2.将来支持多cookies导入，同一次可登录多账号操作</li>
         </ul>
       </el-tab-pane>
     </el-tabs>
@@ -232,12 +235,19 @@
           <el-input v-model="caseForm.patentName"></el-input>
         </el-form-item>
         <el-form-item class="text-left flex" label="申请主体" prop="applyCompanyId">
-          <el-select ref="applyCompany" v-model="caseForm.applyCompanyId" placeholder=""  @change="onApplyCompanyChange">
-            <el-option label="江苏瑞耀纤维科技有限公司" value="aba8a1af48dc423cb74b98ee2766ac31"></el-option>
+          <el-select filterable ref="applyCompany" placeholder="打开预约网页自动抓取列表" v-model="caseForm.applyCompanyId"  @change="onApplyCompanyChange">
+            <!-- <el-option label="江苏瑞耀纤维科技有限公司" value="aba8a1af48dc423cb74b98ee2766ac31"></el-option>
             <el-option label="无锡维邦工业设备成套技术有限公司" value="3f99d86ac20845a785983f63b14c08da"></el-option>
             <el-option label="仪征市龙港机械制造有限公司" value="c8ab5aa31190414088fff2a1ea13892a"></el-option>
             <el-option label="创志科技（江苏）股份有限公司" value="a156798510c34539a4f67785895fe6ea"></el-option>
-            <el-option label="常州江苏大学工程技术研究院" value="02ab8a2756234cce9f01107494e53de5"></el-option>
+            <el-option label="常州江苏大学工程技术研究院" value="02ab8a2756234cce9f01107494e53de5"></el-option> -->
+            <el-option
+              v-for="company in companyList"
+              :key="company.value"
+              :label="company.label"
+              :value="company.value"
+            >
+            </el-option>
           </el-select>
         </el-form-item>
         <el-form-item class="text-left flex" label="联系方式" prop="appointPhone">
@@ -245,16 +255,31 @@
         </el-form-item>
         <el-form-item class="text-left flex" label="专利类型" prop="typeCode">
           <el-select v-model="caseForm.typeCode" placeholder="" ref="type">
-            <el-option label="发明" value="1"></el-option>
+            <!-- <el-option label="发明" value="1"></el-option>
             <el-option label="实用新型" value="2"></el-option>
-            <el-option label="外观设计" value="3"></el-option>
+            <el-option label="外观设计" value="3"></el-option> -->
+            <el-option
+              v-for="company in typeList"
+              :key="company.value"
+              :label="company.label"
+              :value="company.value"
+            >
+            </el-option>
           </el-select>
         </el-form-item>
         <el-form-item class="text-left flex" label="分类号" prop="applyClassifyCode">
           <el-input v-model="caseForm.applyClassifyCode"></el-input>
         </el-form-item>
         <el-form-item class="text-left flex" label="预约时间" prop="orderSubmitTime">
-          <el-input v-model="caseForm.orderSubmitTime" placeholder="格式如：2022-08-29"></el-input>
+          <!-- <el-input v-model="caseForm.orderSubmitTime" placeholder="格式如：2022-08-29"></el-input> -->
+          <el-date-picker
+            v-model="caseForm.orderSubmitTime"
+            type="date"
+            placeholder="选择日期"
+            :picker-options="pickerOptions"
+            value-format="yyyy-MM-dd"
+          >
+          </el-date-picker>
         </el-form-item>
       </el-form>
       <div slot="footer">
@@ -269,6 +294,7 @@
 // @ is an alias to /src
 // import HelloWorld from '@/components/HelloWorld.vue'
 // import CheckUpdate from './CheckUpdate'
+import { isToday } from '@/utils'
 import path from 'path'
 const { ipcRenderer, clipboard, remote } = require('electron')
 
@@ -327,7 +353,7 @@ export default {
         applyCompanyId: '',
         // applyCompanyName: '',
         appointPhone: '',
-        typeCode: '1',
+        typeCode: '',
         applyClassifyCode: '',
         orderSubmitTime: ''
       },
@@ -346,7 +372,16 @@ export default {
       caseFormType: 'add',
       editCaseFormIdex: '0',
       ip: '',
-      inWhitelist: false
+      inWhitelist: false,
+      companyList: [],
+      typeList: [],
+      pickerOptions: {
+        disabledDate (time) {
+          if (isToday(time.getTime())) return false
+          return time.getTime() < Date.now()
+        }
+      },
+      score: 0
     }
   },
   computed: {
@@ -358,6 +393,17 @@ export default {
     }
   },
   methods: {
+    closeBrowser () {
+      ipcRenderer.invoke('closeBrowser')
+    },
+    onExecutionLimitBlur () {
+      console.log(isToday)
+      this.$notify({
+        title: '提示',
+        message: '请不要忘记保存',
+        type: 'warning'
+      })
+    },
     addCookies () {
       const cookies = this.cookies
       this.$prompt('请输入cookies', '提示', {
@@ -373,7 +419,7 @@ export default {
           key: 'cookies',
           value: value
         }])
-        this.getData()
+        this.getStoreData()
       })
     },
     destroySoft () {
@@ -381,7 +427,7 @@ export default {
     },
     async deleteCase (index) {
       await ipcRenderer.invoke('delete-case', index)
-      this.getData()
+      this.getStoreData()
     },
     async editCase (record, index) {
       this.caseFormType = 'edit'
@@ -398,33 +444,37 @@ export default {
       ipcRenderer.invoke('open-config')
     },
     setCase () {
-      const { patentName, applyCompanyId, appointPhone, typeCode, applyClassifyCode, orderSubmitTime } = this.caseForm
-      console.log(patentName)
-      const formData = {
-        patentName,
-        appId: 'yushen',
-        applyFieldId: '3887f4dbf7fe4097903ce8055ba24496', // 以下三个一体 hardcode
-        applyFieldCode: '2', // hardcode
-        applyFieldName: '新型功能和结构材料', // hardcode
-        applyCompanyId,
-        applyCompanyName: this.$refs.applyCompany.selectedLabel,
-        appointPhone,
-        typeCode,
-        typeText: this.$refs.type.selectedLabel,
-        applyClassifyCode,
-        orderSubmitTime,
-        executionFrequency: Number.parseInt(this.executionFrequency)
-      }
-      if (this.caseFormType === 'add') {
-        this.tableData.push({ ...formData })
-      } else {
-        this.$set(this.tableData, this.editCaseFormIdex, formData)
-      }
-      this.caseFormVisible = false
-      ipcRenderer.invoke('setData', [{
-        key: 'caseList',
-        value: this.tableData
-      }])
+      this.$refs.ruleForm.validate((valid) => {
+        if (valid) {
+          const { patentName, applyCompanyId, appointPhone, typeCode, applyClassifyCode, orderSubmitTime } = this.caseForm
+          console.log(patentName)
+          const formData = {
+            patentName,
+            appId: 'yushen',
+            applyFieldId: '3887f4dbf7fe4097903ce8055ba24496', // 以下三个一体 hardcode
+            applyFieldCode: '2', // hardcode
+            applyFieldName: '新型功能和结构材料', // hardcode
+            applyCompanyId,
+            applyCompanyName: this.$refs.applyCompany.selectedLabel,
+            appointPhone,
+            typeCode,
+            typeText: this.$refs.type.selectedLabel,
+            applyClassifyCode,
+            orderSubmitTime,
+            executionFrequency: Number.parseInt(this.executionFrequency)
+          }
+          if (this.caseFormType === 'add') {
+            this.tableData.push({ ...formData })
+          } else {
+            this.$set(this.tableData, this.editCaseFormIdex, formData)
+          }
+          this.caseFormVisible = false
+          ipcRenderer.invoke('setData', [{
+            key: 'caseList',
+            value: this.tableData
+          }])
+        }
+      })
     },
     handleClose () {
       this.caseFormVisible = false
@@ -596,11 +646,14 @@ export default {
     jump () {
       this.$router.push('/path')
     },
-    async getData () {
+    getGlobalData () {
+      this.ip = remote.getGlobal('ip')
+      this.inWhitelist = remote.getGlobal('inWhitelist')
+      this.score = remote.getGlobal('ym_score')
+    },
+    async getStoreData () {
       try {
-        this.ip = remote.getGlobal('ip')
-        this.inWhitelist = remote.getGlobal('inWhitelist')
-        const data = await ipcRenderer.invoke('getData', ['users', 'cookies', 'caseList'])
+        const data = await ipcRenderer.invoke('getStoreData', ['users', 'cookies', 'caseList'])
         const [users, cookies, caseList] = data
         if (users && users.length) {
           const user = users[0]
@@ -616,6 +669,9 @@ export default {
           messag: error.message
         })
       }
+    },
+    openLog () {
+      ipcRenderer.invoke('openLog')
     }
   },
   created () {
@@ -623,13 +679,31 @@ export default {
   async mounted () {
     console.log('home mounted')
     setTimeout(async () => {
-      this.getData()
+      this.getStoreData()
+      this.getGlobalData()
     }, 1000)
+    ipcRenderer.on('setForm', (event, ans) => {
+      if (typeof ans === 'object' && ans != null) {
+        for (const key in ans) {
+          this[key] = ans[key]
+        }
+        if (!this.caseForm.typeCode) {
+          this.caseForm.typeCode = this.typeList.length ? this.typeList[0].value : ''
+        }
+      }
+    })
+    ipcRenderer.on('setClientData', (event, ans) => {
+      const { key, value } = ans
+      this[key] = value
+    })
     ipcRenderer.on('log', (event, ans) => {
       this.logs.push(ans)
     })
     ipcRenderer.on('setCookies', (event, ans) => {
       this.cookies = ans
+    })
+    ipcRenderer.on('setCaseList', (event, ans) => {
+      this.tableData = ans
     })
     ipcRenderer.on('closePage', (event, ans) => {
       console.log('page closed')
@@ -849,6 +923,12 @@ export default {
       height: 24px;
       text-decoration: none;
       margin-left: 8px;
+    }
+    .ym-balance {
+      position: absolute;
+      left: 8px;
+      color: rgb(182, 177, 177);
+      font-size: 14px;
     }
     .ip {
       position: absolute;
