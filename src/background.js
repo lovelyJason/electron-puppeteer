@@ -871,18 +871,21 @@ async function debug(event) {
 }
 // console.log(path.join(__static,"./"))  // D:\projects\electron-puppeteer\public\
 async function createWindow() {
-  win = new BrowserWindow({
+  const browserWindowOptions = {
     width: 780,
     height: 760,
     resizable: false,
-    icon: path.join(__static, "./icon64.ico"),
     webPreferences: {
       // Use pluginOptions.nodeIntegration, leave this alone
       // See nklayman.github.io/vue-cli-plugin-electron-builder/guide/security.html#node-integration for more info
       nodeIntegration: process.env.ELECTRON_NODE_INTEGRATION,
       enableRemoteModule: true
     }
-  })
+  }
+  if(process.platform !== 'darwin') {
+    browserWindowOptions.icon = path.join(__static, "./icon64.ico")
+  }
+  win = new BrowserWindow(browserWindowOptions)
   // 注册更新检查
   Update(win, log);
 
