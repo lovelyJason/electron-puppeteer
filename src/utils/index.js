@@ -82,6 +82,10 @@ const timeout = function (delay) {
 const interval = function (p, delay, limit, cb) {
   let count = 0
   return new Promise((resolve, reject) => {
+    function close () {
+      timerId && clearInterval(timerId)
+      resolve(0)
+    }
     const timerId = setInterval(async () => {
       try {
         count++
@@ -90,7 +94,8 @@ const interval = function (p, delay, limit, cb) {
         if (typeof cb === 'function') {
           cb(timerId, count)
         }
-        const res = await p()
+        // 如果这个操作比较耗时，导致还没进行超时判断，定时器走了很多次
+        const res = await p(timerId, count, close)
         if (res === 1) {
           // 执行结果如果达到效果，可以清除定时器
           clearInterval(timerId)
@@ -101,7 +106,6 @@ const interval = function (p, delay, limit, cb) {
           clearInterval(timerId)
           // reject(new Error('超出调用限制'))
           resolve(0)
-          return
         }
       } catch (e) {
         clearInterval(timerId)

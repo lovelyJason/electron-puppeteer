@@ -7,6 +7,8 @@
           <a href="javascript:void(0)" style="color: #42b983" @click="jump"
             >选择浏览器路径</a
           >
+          <!-- <a href="javascript:void(0)" style="color: #42b983;margin-left: 6px;" @click="test"
+            >测试</a> -->
         </div>
         <div style="display: flex;">
           <div class="left">
@@ -81,7 +83,7 @@
                 <el-form-item>
                   <template slot="label">
                     <span style="margin-right: 6px;">执行上限</span>
-                    <el-tooltip effect="light" content="同一个单据最多可并发执行的次数，如果是串行模式下，最多只会成功预约一次" placement="bottom">
+                    <el-tooltip effect="light" content="单据队列中最多可并发执行的次数" placement="bottom">
                       <i class="el-icon-warning-outline"></i>
                     </el-tooltip>
                   </template>
@@ -89,17 +91,18 @@
                 </el-form-item>
                 <el-form-item>
                   <template slot="label">
-                    <span style="margin-right: 6px;">线程数量</span>
-                    <!-- <el-tooltip effect="light" content="同一个单据最多可并发执行的次数" placement="bottom">
+                    <span style="margin-right: 6px;">成功上限</span>
+                    <el-tooltip effect="light" placement="bottom">
+                      <div slot="content">并行模式且当请求接口较慢且此数字较大时，此参数可能不会生效<br />因为接口速度过慢，而频率快的时候，已经提交了很多次并且收到结果</div>
                       <i class="el-icon-warning-outline"></i>
-                    </el-tooltip> -->
+                    </el-tooltip>
                   </template>
-                  <el-input disabled v-model="execution.threadCount"></el-input>
+                  <el-input @blur="onExecutionSuccessLimitBlur" v-model="execution.successLimit"></el-input>
                 </el-form-item>
                 <el-form-item v-if="execution.model === 2">
                   <template slot="label">
                     <span style="margin-right: 6px;">执行频率</span>
-                    <el-tooltip effect="light" content="同一个单据循环执行的时间间隔" placement="bottom">
+                    <el-tooltip effect="light" content="循环执行的时间间隔" placement="bottom">
                       <i class="el-icon-warning-outline"></i>
                     </el-tooltip>
                   </template>
@@ -194,7 +197,7 @@
           <el-table-column prop="typeText" label="专利类型" width="60"> </el-table-column>
           <el-table-column prop="applyClassifyCode" label="分类号" width="58"> </el-table-column>
           <el-table-column prop="orderSubmitTime" label="预约时间" width="100"> </el-table-column>
-          <el-table-column label="预约时间" width="180" fixed="right">
+          <el-table-column label="操作" width="180" fixed="right">
             <template slot-scope="scope">
               <el-button type="primary" @click="editCase(scope.row, scope.$index)">编辑</el-button>
               <el-button type="danger" @click="deleteCase(scope.$index)">删除</el-button>
@@ -208,11 +211,11 @@
           本程序不区分事务所版，企业版，原理都是一样<br />
           使用步骤：
           <li>本工具依然是看脸,不过可以比普通人同时多看几次脸</li>
-          <li>1.启动浏览器，拖动滑块登陆过可以在网页中操作，这是抢购方式一，爬虫操作，速度较慢，继续往下</li>
-          <li>2.在本客户端输入表单信息，或者在网页输入，会自动同步到此，预约时间你选任意合法格式</li>
+          <li>1.启动浏览器，在提交网页中操作，这是抢购方式一，爬虫操作，速度较慢，继续往下</li>
+          <li>2.在本客户端提前录入表单信息</li>
           <li>3.点击《开始》按钮，会直接并发提交数据，不经过网页端，但也可能会失败;如果失败原因是网络错误，网站崩溃,会继续执行直到有结果；如果失败原因是余额不足等错误，会继续按照执行频率循环执行，直到达到你设置的执行上限则结束运行</li>
           <li>如果任务启动后卡住不动没有输出日志，大概率是504，省局崩溃</li>
-          <li>串行/并行模式：串行是等待第一个案子预约结果成功或失败才会开启下一轮，并行是单张或多张单据按照设定的频率即时间间隔循环执行；建议填写多张单据，并在放号之前1到2秒开始执行，并控制好次数，没到放号之前的请求必然是无效；填写多张单据时，执行任务会轮流提交不同的案子，减少相同案子重复预约成功的概率。<span style="color: #bb7373;">需要注意的是，串行模式下预约成功后会把那一条单据移除掉，确保不会预约重复；如果是并行模式下，因为一瞬间执行了很多条，已经在提交当中的撤回不了，因此在本轮请求尚未结束之前，有可能预约到重复，需要自己控制频率，时机。</span></li>
+          <li>串行/并行模式：串行是等待第一个案子预约结果成功或失败才会开启下一轮，并行是单张或多张单据按照设定的频率即时间间隔循环执行；建议填写多张单据，并在放号之前1到2秒开始执行，并控制好次数，没到放号之前的请求必然是无效；填写多张单据时，执行任务会轮流提交不同的案子，减少相同案子重复预约成功的概率。<span style="color: #bb7373;">需要注意的是，串行模式下预约成功后会把那一条单据移除掉，确保不会预约重复，这也是通常注册机采用的方式；如果是并行模式下，因为一瞬间执行了很多条，已经在提交当中的撤回不了，因此在本轮请求尚未结束之前，并且填写的案子很少的时候，有可能预约到重复，需要自己控制频率，时机。如果余额为1的，选并行就行了，因为一定不会预约到重复</span></li>
           <li>目前多次点击开始任务也可，但是队列中一次只会执行两条任务，可以理解为多线程，防止疯狂点击。停止的时候也只会停止当前队列中的任务，比如连续三次开始，点击一次停止只会停止两条任务，再点击停止会停止掉最后一条任务</li>
           <br />
           待开发功能：
@@ -296,6 +299,7 @@
 // import CheckUpdate from './CheckUpdate'
 import { isToday } from '@/utils'
 import path from 'path'
+import { windowCreate } from '@/plugins'
 const { ipcRenderer, clipboard, remote } = require('electron')
 
 export default {
@@ -306,7 +310,6 @@ export default {
   data () {
     return {
       tab: 'first',
-      threadCount: 1,
       height: 280,
       rowHeight: 50,
       columns: Array.from({ length: 10 }, (_, idx) => {
@@ -341,7 +344,7 @@ export default {
       executionFrequency: 300,
       execution: {
         limit: 5,
-        threadCount: 1,
+        successLimit: 5,
         executionFrequency: 500,
         model: 2
       },
@@ -397,12 +400,26 @@ export default {
       ipcRenderer.invoke('closeBrowser')
     },
     onExecutionLimitBlur () {
-      console.log(isToday)
       this.$notify({
         title: '提示',
         message: '请不要忘记保存',
         type: 'warning'
       })
+    },
+    onExecutionSuccessLimitBlur () {
+      this.$notify({
+        title: '提示',
+        message: '请不要忘记保存',
+        type: 'warning'
+      })
+      const { limit, successLimit } = this.execution
+      if (Number.parseInt(successLimit) > Number.parseInt(limit)) {
+        this.$message({
+          type: 'error',
+          message: '成功上限不可大于执行上限'
+        })
+        this.execution.successLimit = this.execution.limit
+      }
     },
     addCookies () {
       const cookies = this.cookies
@@ -525,8 +542,8 @@ export default {
       try {
         const executionParams = {
           executionFrequency: Number.parseInt(this.execution.executionFrequency),
-          threads: Number.parseInt(this.execution.threadCount),
           limit: Number.parseInt(this.execution.limit),
+          successLimit: Number.parseInt(this.execution.successLimit),
           model: Number.parseInt(this.execution.model)
         }
         const res = await ipcRenderer.invoke('set-execution-params', executionParams)
@@ -645,6 +662,20 @@ export default {
     },
     jump () {
       this.$router.push('/path')
+    },
+    openSubWindow () {
+      windowCreate({
+        title: '今日预约历史',
+        isMainWin: false,
+        route: 'subpage',
+        width: 500,
+        height: 400,
+        resizable: false,
+        modal: false,
+        maximize: false,
+        minimizable: false,
+        fullscreenable: false
+      })
     },
     getGlobalData () {
       this.ip = remote.getGlobal('ip')

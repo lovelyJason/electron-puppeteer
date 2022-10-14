@@ -62,7 +62,7 @@ export default {
 <style lang="less" scoped>
   .select-browser {
     text-align: center;
-    height: calc(~"100% - 88px");
+    height: calc(~"100% - 14px");
     position: relative;
   }
   .el-input {
@@ -76,6 +76,8 @@ export default {
     color: rgb(206, 134, 134);
   }
   .bg {
+    position: absolute;
+    bottom: 0;
     width: 100%;
     height: 350px;
     background: url('https://tva1.sinaimg.cn/large/0072Vf1pgy1foxkiztofjj31hc0u07g2.jpg') no-repeat center;

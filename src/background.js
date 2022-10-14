@@ -1,7 +1,7 @@
 'use strict'
 
 import { app, protocol, BrowserWindow, ipcMain, dialog, Menu, shell } from 'electron'
-import { createProtocol } from 'vue-cli-plugin-electron-builder/lib'
+// import { createProtocol } from 'vue-cli-plugin-electron-builder/lib'
 // import installExtension, { VUEJS_DEVTOOLS } from 'electron-devtools-installer'
 import { login } from './puppeteer/index.js'
 import { interval, timeout, getImgBase64Data } from './utils'
@@ -13,9 +13,6 @@ import axios from 'axios'
 // import api from '@/lib/api'
 // require('@electron/remote/main').initialize()      // electron 10.0以下版本不兼容
 import { Window } from './windows.js'
-
-dayjs.extend(AdvancedFormat)
-// console.log(dayjs('2022-08-26').isSameOrAfter(dayjs(dayjs().format('YYYY-MM-DD'))))
 
 const { exec } = require('child_process');
 // const https = require('https');
@@ -33,6 +30,14 @@ const Semaphore = require('async-mutex').Semaphore;
 const cheerio = require('cheerio')
 const { getUserInfo, getRecognition } = require('./lib/ym')
 const https = require('follow-redirects').https;
+var advancedFormat = require('dayjs/plugin/advancedFormat')
+var isToday = require('dayjs/plugin/isToday')
+
+dayjs.extend(AdvancedFormat)
+dayjs.extend(isToday)
+// console.log(dayjs('2022-08-26').isSameOrAfter(dayjs(dayjs().format('YYYY-MM-DD'))))
+
+let window = new Window()
 
 const instance = axios.create({
   httpsAgent: new https.Agent({
@@ -55,19 +60,17 @@ let submit_cookie = ''
 let executionParams = {
   executionFrequency: 500,
   limit: 5,
-  model: 2
+  model: 2,
+  successLimit: 5
 }
-let curExecutionCount = 1 // 当前执行的次序
 let executionSuccessCount = 0
 let subscribeSuccessCount = 0
 let formDataList = []
 let webPageTimerId = null
 let has_auth = false
 let whiteList = [{ ip: '127.0.0.1' }]
-let home_page_cookies = []
 let requestCancelFns = []
-let release
-let lockValue
+let release = void(0)
 
 // let rule = new schedule.RecurrenceRule();
 // 毫秒无效， 当秒间隔时间加上当前时间大于60的时候不会生效
@@ -129,6 +132,37 @@ getYmScore()
     global.inWhitelist = true
   }
 }());
+
+async function getHistory () {
+  var config = {
+    method: 'get',
+    url: 'https://zlys.jsipp.cn/auth/patent/getAppointHistoryPageData?appId=yushen&pageNo=1&pageSize=10',
+    headers: {
+      'Accept': 'application/json, text/javascript, */*; q=0.01',
+      'Accept-Language': 'zh-CN,zh;q=0.9',
+      'Connection': 'keep-alive',
+      'Cookie': (global.browser && global.lastPage) ? submit_cookie : store.get('cookies'),
+      'Referer': 'https://zlys.jsipp.cn/auth/patent/getAppointHistoryPage?appId=yushen',
+      'Sec-Fetch-Dest': 'empty',
+      'Sec-Fetch-Mode': 'cors',
+      'Sec-Fetch-Site': 'same-origin',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36',
+      'X-Requested-With': 'XMLHttpRequest',
+      'sec-ch-ua': '"Chromium";v="106", "Google Chrome";v="106", "Not;A=Brand";v="99"',
+      'sec-ch-ua-mobile': '?0',
+      'sec-ch-ua-platform': '"Windows"'
+    }
+  };
+
+  return axios(config)
+  .then(function (response) {
+    return response.data
+  })
+  .catch(function (error) {
+    return error
+  });
+
+}
 
 ;(async function() {
   await checkMachineAuth()
@@ -199,14 +233,14 @@ function getLocalAreaNetworkIPAdress() {
 function requestVcode() {
   return new Promise((resolve) => {
     var options = {
-      method: 'GET',
-      hostname: 'zlys.jsipp.cn',
-      path: '/toPage/vcode?rand=' + new Date().getMilliseconds(),
-      headers: {
+      'method': 'GET',
+      'hostname': 'zlys.jsipp.cn',
+      'path': '/toPage/vcode?rand=' + new Date().getMilliseconds(),
+      'headers': {
         'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
         'Accept-Language': 'zh-CN,zh;q=0.9',
         'Connection': 'keep-alive',
-        'Cookie': 'front_bpm.session.id=e73dea9683c743a8aa9c4d4392306a1c; JSESSIONID=68BD16F45609E7B6916348184DB625A4',
+        'Cookie': (global.browser && global.lastPage) ? submit_cookie : store.get('cookies'),
         'Referer': 'https://zlys.jsipp.cn/auth/patent/general/toAppointmentPage?appId=yushen',
         'Sec-Fetch-Dest': 'image',
         'Sec-Fetch-Mode': 'no-cors',
@@ -216,8 +250,8 @@ function requestVcode() {
         'sec-ch-ua-mobile': '?0',
         'sec-ch-ua-platform': '"Windows"'
       },
-      maxRedirects: 20
-    }
+      'maxRedirects': 20
+    };
 
     var req = https.request(options, function (res) {
       var chunks = []
@@ -248,21 +282,28 @@ function requestVcode() {
 // }
 async function submitFormSerially() {
   for(let order = 1;order <= executionParams.limit;order++) {
+    let data = formDataList[0]
+    if(!data) {
+      win.webContents.send('log', '当前所有单据均已预约成功，提前终止任务...')
+      break
+    }
+    if(executionParams.successLimit === subscribeSuccessCount) {
+      win.webContents.send('log', '已达到预约成功上限，终止任务...')
+      break
+    }
+    let code
+
     let base64Data = await requestVcode()
     let codeRes = await getRecognition(base64Data) // {"msg":"识别成功","code":10000,"data":{"code":0,"data":"9033","time":0.010438203811645508,"unique_code":"ammu43nCeFgF4KuHE+TYYcKYpnqhp0BddZxqxBszors"}}
-    let code = codeRes.data && codeRes.data.data
+    code = codeRes.data && codeRes.data.data
     console.log('打码结果', code)
     if(!code) {
       win.webContents.send('log', '图片验证码识别失败')
-      return
+      continue
     }
-    let data = formDataList[0]
-    let body = Object.assign(data, { code })
-    if(!data) {
-      win.webContents.send('log', '当前所有单据均已预约成功，提前终止任务...')
-      return
-    }
+
     formDataList.push(formDataList.shift())
+    let body = Object.assign(data, { code })
     let config = {
       method: 'post',
       url: 'https://zlys.jsipp.cn/auth/patent/general/appoint/general',
@@ -283,6 +324,13 @@ async function submitFormSerially() {
         requestCancelFns.push(c)
       })
     }
+    // config = {
+    //   method: 'get',
+    //   url: 'http://127.0.0.1:3000/api/test',
+    //   cancelToken: new CancelToken(function executor(c) {
+    //     requestCancelFns.push(c)
+    //   })
+    // }
     try {
       console.log('当前请求参数', body)
       let response = await instance(config)
@@ -316,24 +364,50 @@ async function submitFormSerially() {
       win.webContents.send('setClientData', { key: 'score', value: score })
     }
   }
-  log.info(`本次任务${executionParams.limit}条，操作成功数量：${executionSuccessCount}，<span style="color: #fc5531;">其中预约成功数量${subscribeSuccessCount}条</span>,操作失败数量：${executionParams.limit - executionSuccessCount}\n`)
+  log.info(`本次任务${executionParams.limit}条，操作成功数量：${executionSuccessCount}，其中预约成功数量${subscribeSuccessCount}条,操作失败数量：${executionParams.limit - executionSuccessCount}\n`)
   win.webContents.send('log', `本次任务${executionParams.limit}条，操作成功数量：${executionSuccessCount}，<span style="color: #fc5531;">其中预约成功数量${subscribeSuccessCount}条</span>, 操作失败数量：${executionParams.limit - executionSuccessCount}\n`)
   return true
 }
 
-function submitForm() {
+function submitForm(timerId, order, close) {
   return new Promise(async (resolve, reject) => {
-    // 读取验证码 https://zlys.jsipp.cn/toPage/vcode?rand=837
-    // let base64Data = await getImgBase64Data(codeUrl) // 这么直接的好像省局不通过，应该是与头部信息有关
-    let base64Data = await requestVcode()
-    let codeRes = await getRecognition(base64Data) // {"msg":"识别成功","code":10000,"data":{"code":0,"data":"9033","time":0.010438203811645508,"unique_code":"ammu43nCeFgF4KuHE+TYYcKYpnqhp0BddZxqxBszors"}}
-    let code = codeRes.data && codeRes.data.data
-    console.log('打码结果', code)
-    if(!code) {
-      win.webContents.send('log', '图片验证码识别失败')
+    // 要放置在打码开头，否则打码也会耗时导致定时器走多次；并且不能中断请求，因为尚在请求中的也在次数之内
+    if(order > executionParams.limit) {
+      close()
+      clearTask(false)
       return resolve(0)
     }
     let data = formDataList[0]
+    if(!data) {
+      win.webContents.send('log', '当前所有单据均已预约成功，提前终止任务...')
+      log.info(`本次任务${executionParams.limit}条，操作成功数量：${executionSuccessCount}，其中预约成功数量${subscribeSuccessCount}条，操作失败数量：${executionParams.limit - executionSuccessCount}\n`)
+      win.webContents.send('log', `本次任务${executionParams.limit}条，操作成功数量：${executionSuccessCount}，<span style="color: #fc5531;">其中预约成功数量${subscribeSuccessCount}条</span>, 操作失败数量：${executionParams.limit - executionSuccessCount}\n`)
+      close()
+      clearTask()
+      return resolve(0)
+    }
+    if(executionParams.successLimit === subscribeSuccessCount) {
+      win.webContents.send('log', '已达到预约成功上限，终止任务...')
+      log.info(`本次任务${executionParams.limit}条，操作成功数量：${executionSuccessCount}，其中预约成功数量${subscribeSuccessCount}条，操作失败数量：${executionParams.limit - executionSuccessCount}\n`)
+      win.webContents.send('log', `本次任务${executionParams.limit}条，操作成功数量：${executionSuccessCount}，<span style="color: #fc5531;">其中预约成功数量${subscribeSuccessCount}条</span>, 操作失败数量：${executionParams.limit - executionSuccessCount}\n`)
+      close()
+      clearTask()
+      return resolve(0)
+    }
+    // 读取验证码 https://zlys.jsipp.cn/toPage/vcode?rand=837
+    // let base64Data = await getImgBase64Data(codeUrl) // 这么直接的好像省局不通过，应该是与头部信息有关
+
+    let code
+
+    // let base64Data = await requestVcode()
+    // let codeRes = await getRecognition(base64Data) // {"msg":"识别成功","code":10000,"data":{"code":0,"data":"9033","time":0.010438203811645508,"unique_code":"ammu43nCeFgF4KuHE+TYYcKYpnqhp0BddZxqxBszors"}}
+    // code = codeRes.data && codeRes.data.data
+    // console.log('打码结果', code)
+    // if(!code) {
+    //   win.webContents.send('log', '图片验证码识别失败')
+    //   return resolve(0)
+    // }
+
     let body = Object.assign(data, { code })
     let config = {
       method: 'post',
@@ -355,20 +429,23 @@ function submitForm() {
         requestCancelFns.push(c)
       })
     }
-    formDataList.push(formDataList.shift())
-    if(!data) {
-      win.webContents.send('log', '当前所有单据均已预约成功，提前终止任务...')
-      clearTask()
-      reject(new Error('所有单据均预约成功'))
+    config = {
+      method: 'get',
+      url: 'http://127.0.0.1:3000/api/test',
+      cancelToken: new CancelToken(function executor(c) {
+        requestCancelFns.push(c)
+      })
     }
+    formDataList.push(formDataList.shift())
+
     console.log('当前请求参数', body)
     instance(config)
      .then(function (response) {
         //  {"msg":"请选择预约日期!!","code":-1,"success":false}
         log.info('接口调用成功', JSON.stringify(response.data));
-        win.webContents.send('log', '第' + curExecutionCount + '次执行：' + dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data))
+        win.webContents.send('log', '第' + order + '次执行：' + dayjs().format('HH:mm:ss') + '：' + JSON.stringify(response.data))
         const { code } = response.data
-        curExecutionCount++   // 此处问题是请求过快时，一条也是2条
+        // curExecutionCount++   // 此处问题是如果接口越慢，然后频率给的低的时候，此处定时器已经会走了很多回
         executionSuccessCount++
         if(code == 0) {  // 提交成功
           console.log('data.patentName:', data ? data.patentName : '')
@@ -381,27 +458,27 @@ function submitForm() {
           formDataList.pop()
         }
       }).catch(function (error) {
-        curExecutionCount++
+        // curExecutionCount++
         if (axios.isCancel(error)) {
-          return
-        }
-        if(error.message) {
-          log.error('接口调用错误', error.message);  // 404，504， 如果回应时间较长，可能长时间没有回应，但是定时器执行多次
-          win.webContents.send('log', dayjs().format('HH:mm:ss') + '：' + error.message)
-          if(error.message.includes('404')) {
-            reject(error)
+
+        } else {
+          if(error.message) {
+            log.error('接口调用错误', error.message);  // 404，504， 如果回应时间较长，可能长时间没有回应，但是定时器执行多次
+            win.webContents.send('log', dayjs().format('HH:mm:ss') + '：' + error.message)
+            if(error.message.includes('404')) {
+              reject(error)
+            }
           }
         }
      }).finally(async () => {
-       if(curExecutionCount > executionParams.limit) {
-         log.info(`本次任务${executionParams.limit}条，操作成功数量：${executionSuccessCount}，<span style="color: #fc5531;">其中预约成功数量${subscribeSuccessCount}条</span>，操作失败数量：${executionParams.limit - executionSuccessCount}\n`)
+       if(order >= executionParams.limit) {
+         log.info(`本次任务${executionParams.limit}条，操作成功数量：${executionSuccessCount}，其中预约成功数量${subscribeSuccessCount}条，操作失败数量：${executionParams.limit - executionSuccessCount}\n`)
          win.webContents.send('log', `本次任务${executionParams.limit}条，操作成功数量：${executionSuccessCount}，<span style="color: #fc5531;">其中预约成功数量${subscribeSuccessCount}条</span>, 操作失败数量：${executionParams.limit - executionSuccessCount}\n`)
          resolve(2)
         } else {
           resolve(0)
         }
-        let score = await getYmScore()
-        win.webContents.send('setClientData', { key: 'score', value: score })
+
      })
 
   })
@@ -712,7 +789,7 @@ function validateForm() {
         lastPage.$eval('.layui-form .layui-form-item:nth-child(2) input[type="text"]', el => el.value),
         lastPage.$eval('.layui-form .layui-form-item:nth-child(3) input[name="appointPhone"]', el => el.value),
         lastPage.$eval('.layui-form .layui-form-item:nth-child(5) input', el => el.value),
-        lastPage.$eval('.layui-form .layui-form-item:nth-child(6) input[id="applyClassifyCode"]', el => el.value),
+        lastPage.$eval('.layui-form input[id="applyClassifyCode"]', el => el.value),
         lastPage.$eval('.layui-form .layui-form-item:nth-child(7) input[id="orderSubmitTime"]', el => el.value)
       ])
       let [patentName, applyCompanyId, appointPhone, typeCode, applyClassifyCode] = res
@@ -946,40 +1023,33 @@ async function postTask(event, ans) {
     throw error
   }
 }
-function clearTask() {
-  release()
+function clearTask(abortRequest=true) {
+  if(typeof release === 'function') {
+    release()
+  }
   semaphore.setValue(2)
+  if(abortRequest) {
+    requestCancelFns.forEach(fn => {
+      if(typeof fn === 'function') {
+        fn()
+      }
+    })
+  }
   if(executionParams.model === 2) {
     if(global.taskTimerIds && global.taskTimerIds.length) {
       global.taskTimerIds.forEach(taskTimerId => {
         clearInterval(taskTimerId)
       })
     }
+    global.taskTimerIds = []
+  } else {
+
   }
-  requestCancelFns.forEach(fn => {
-    if(typeof fn === 'function') {
-      fn()
-    }
-  })
   requestCancelFns = []
   win.webContents.send('log', '当前队列所有任务已终止，如还有任务在排队中，可继续点击停止')
 }
 async function stopTask() {
   clearTask()
-}
-async function restore(event, ans) {
-  const { balanceNum } = ans
-  if(balanceNum) {
-    global.balanceNum = balanceNum
-  }
-  if(global.lastPage) {
-    interval(setOrderTime, 800, 0, function(timerId) {
-      // global.taskTimerId = timerId
-      global.taskTimerIds.push(timerId)
-    })
-  } else {
-    postTask()
-  }
 }
 async function debug(event) {
   let lastPage = global.lastPage
@@ -1015,15 +1085,27 @@ async function createWindow() {
   //   // Load the index.html when not in development
   //   win.loadURL('app://./index.html')
   // }
-  let window = new Window()
   window.listen()
-  window.createWindows({ isMainWin: true, width: 780, height: 760})
+  window.createWindows({ isMainWin: true, width: 780, height: 760, fullscreenable: false})
   win = window.main
 
   // 注册更新检查
   Update(win, log);
   global.win = win
   win.webContents.send('setCookies', store.get('cookies'))
+
+  ipcMain.on('getHistory', (async event => {
+    try {
+      let res = await getHistory()
+      let list = res && res.data && res.data.list || []
+      list = list.filter(val => {
+        return dayjs(val.createTime).isToday()
+      })
+      event.reply('getHistoryReply', list)
+    } catch (error) {
+
+    }
+  }))
   ipcMain.handle('openLog', (event) => {
     if(process.platform !== 'darwin') {
       exec('start ' + path.resolve(global.STORE_PATH, './logs/main.log'))
@@ -1079,7 +1161,6 @@ async function createWindow() {
   ipcMain.handle('submit', async (event, ans) => {
     // console.log(semaphore.isLocked())   // 终止程序可能会导致还在锁定
     const [value, releaseFn] = await semaphore.acquire()
-    lockValue = value
     release = releaseFn
     try {
       if(!has_auth) {
@@ -1090,21 +1171,25 @@ async function createWindow() {
       // }
 
       formDataList = ans
-      curExecutionCount = 1
       executionSuccessCount = 0
       subscribeSuccessCount = 0
       requestCancelFns = []
-      win.webContents.send('log', '任务执行中，请耐心等待......')
+      global.taskTimerIds = []
+      win.webContents.send('log', '任务执行中，如果下方没有输出日志，是因为还在提交中，请耐心等待......')
       // 并行执行
       if(executionParams.model === 2 || !executionParams.model) {
-        let res = await interval(() => {
-          return submitForm()
+        let res = await interval((timerId, order, close) => {
+          return submitForm(timerId, order, close)
         }, executionParams.executionFrequency || 800, executionParams.limit, function(timerId, count) {
-          // global.taskTimerId = timerId
           global.taskTimerIds.push(timerId)
           // curExecutionCount = count
         })
-        if(res) {
+        // log.info(`本次任务${executionParams.limit}条，操作成功数量：${executionSuccessCount}，其中预约成功数量${subscribeSuccessCount}条，操作失败数量：${executionParams.limit - executionSuccessCount}\n`)
+        // win.webContents.send('log', `本次任务${executionParams.limit}条，操作成功数量：${executionSuccessCount}，<span style="color: #fc5531;">其中预约成功数量${subscribeSuccessCount}条</span>, 操作失败数量：${executionParams.limit - executionSuccessCount}\n`)
+
+        let score = await getYmScore()
+        win.webContents.send('setClientData', { key: 'score', value: score })
+        if(res === 1) {
           return { code: 0, msg: '本次任务操作完成' }
         } else {
           return { code: -1, msg: '超出调用次数限制，本次任务完成' }
@@ -1117,6 +1202,21 @@ async function createWindow() {
       return error
     } finally {
       release()
+      window.createWindows(
+        {
+          isMainWin: false,
+          title: '今日预约历史',
+          isMainWin: false,
+          route: 'subpage',
+          width: 500,
+          height: 400,
+          resizable: false,
+          modal: false,
+          maximize: false,
+          minimizable: false,
+          fullscreenable: false
+        }
+      )
     }
   })
   ipcMain.on('start', async (event, ans) => {
@@ -1128,13 +1228,6 @@ async function createWindow() {
         })
         return
       }
-      // if(!global.inWhitelist) {
-      //   win.webContents.send('message', {
-      //     type: 'error',
-      //     message: '不在ip白名单中，禁止操作'
-      //   })
-      //   return false
-      // }
       // 都有效果
       event.sender.send('log', '正在为您初始化页面，将自动登录账号，但是需要自己拖动滑块；如果出错了没有打开最终预约页面，需要自己导入cookies，教程：http://cdn.qdovo.com/doudou.gif')
       // win.webContents.send('log', '正在为您初始化页面，将自动登录账号，但是需要自己拖动滑块')
@@ -1169,7 +1262,6 @@ async function createWindow() {
       log.error('error', error.message)
       event.returnValue = error
     }
-
 
     page.on('load', async (e) => {
       let url = await page.url()

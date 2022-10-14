@@ -31,10 +31,10 @@ export class Window {
   }
 
   // 窗口配置
-  winOpts (wh = []) {
+  winOpts (opt) {
     const opts = {
-      width: wh[0],
-      height: wh[1],
+      width: 800,
+      height: 600,
       // backgroundColor: '#f00',
       // autoHideMenuBar: true,
       // titleBarStyle: "hidden",
@@ -82,12 +82,11 @@ export class Window {
       }
     }
 
-    const opt = this.winOpts([args.width || 800, args.height || 600])
+    const opt = Object.assign(this.winOpts(), options)
     if (args.parentId) {
       console.log('parentId：' + args.parentId)
       opt.parent = this.getWindow(args.parentId)
     } else if (this.main) {
-      console.log(666)
     }
 
     if (typeof args.modal === 'boolean') opt.modal = args.modal

@@ -33,7 +33,6 @@
 
 <script>
 import config from '../package.json'
-import { windowCreate } from '@/plugins'
 const { ipcRenderer, remote, clipboard } = require('electron')
 
 export default {
@@ -58,18 +57,6 @@ export default {
       this.$message({
         type: 'success',
         message: '已复制到剪切板'
-      })
-    },
-    handleNewWin1 () {
-      windowCreate({
-        title: '管理页面',
-        route: '/changelog',
-        width: 1000,
-        height: 750,
-        backgroundColor: '#f9f9f9',
-        resizable: true,
-        modal: true,
-        maximize: true
       })
     },
     async getData () {
