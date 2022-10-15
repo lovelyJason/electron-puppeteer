@@ -31,10 +31,10 @@ export class Window {
   }
 
   // 窗口配置
-  winOpts (opt) {
+  winOpts (wh=[]) {
     const opts = {
-      width: 800,
-      height: 600,
+      width: wh[0],
+      height: wh[1],
       // backgroundColor: '#f00',
       // autoHideMenuBar: true,
       // titleBarStyle: "hidden",
@@ -70,7 +70,7 @@ export class Window {
 
   // 创建窗口
   createWindows (options) {
-    console.log('------------开始创建窗口...')
+    // console.log('------------开始创建窗口...')
 
     const args = Object.assign({}, windowsCfg, options)
 
@@ -82,9 +82,9 @@ export class Window {
       }
     }
 
-    const opt = Object.assign(this.winOpts(), options)
+    const opt = this.winOpts([args.width || 800, args.height || 600])
     if (args.parentId) {
-      console.log('parentId：' + args.parentId)
+      // console.log('parentId：' + args.parentId)
       opt.parent = this.getWindow(args.parentId)
     } else if (this.main) {
     }
@@ -94,9 +94,15 @@ export class Window {
     if (args.backgroundColor) opt.backgroundColor = args.backgroundColor
     if (args.minWidth) opt.minWidth = args.minWidth
     if (args.minHeight) opt.minHeight = args.minHeight
+    if (args.x) opt.x = args.x
+    if (args.y) opt.y = args.y
+    if (typeof args.minimizable === 'boolean') opt.minimizable = args.minimizable
+    if (typeof args.fullscreenable === 'boolean') opt.fullscreenable = args.minifullscreenablemizable
+    if (typeof args.frame === 'boolean') opt.frame = args.frame
+    // console.log('opt', opt)
 
     const win = new BrowserWindow(opt)
-    console.log('窗口id：' + win.id)
+    // console.log('窗口id：' + win.id)
     this.group[win.id] = {
       route: args.route,
       isMultiWindow: args.isMultiWindow
@@ -191,7 +197,7 @@ export class Window {
         }
       }
     ])
-    console.log(__dirname)
+    // console.log(__dirname)
     // const trayIco = path.join(__dirname, '../static/logo.png')
     // console.log(trayIco)
     this.tray = new Tray()

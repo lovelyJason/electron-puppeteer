@@ -7,8 +7,8 @@
           <a href="javascript:void(0)" style="color: #42b983" @click="jump"
             >选择浏览器路径</a
           >
-          <!-- <a href="javascript:void(0)" style="color: #42b983;margin-left: 6px;" @click="test"
-            >测试</a> -->
+          <a href="javascript:void(0)" style="color: #42b983;margin-left: 6px;" @click="openSubWindow"
+            >测试</a>
         </div>
         <div style="display: flex;">
           <div class="left">
@@ -664,7 +664,13 @@ export default {
       this.$router.push('/path')
     },
     openSubWindow () {
+      const cur = remote.getCurrentWindow()
+      const position = cur.getPosition()
+      const size = cur.getSize()
+      const [width] = size
+      const [x, y] = position
       windowCreate({
+        parentId: remote.getCurrentWindow().id,
         title: '今日预约历史',
         isMainWin: false,
         route: 'subpage',
@@ -674,7 +680,9 @@ export default {
         modal: false,
         maximize: false,
         minimizable: false,
-        fullscreenable: false
+        fullscreenable: false,
+        x: x + width,
+        y
       })
     },
     getGlobalData () {

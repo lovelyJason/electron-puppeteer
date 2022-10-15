@@ -1202,8 +1202,13 @@ async function createWindow() {
       return error
     } finally {
       release()
+      let position = win.getPosition()
+      let size = win.getSize()
+      const [width] = size
+      const [x, y] = position
       window.createWindows(
         {
+          parentId: win.id,
           isMainWin: false,
           title: '今日预约历史',
           isMainWin: false,
@@ -1214,7 +1219,9 @@ async function createWindow() {
           modal: false,
           maximize: false,
           minimizable: false,
-          fullscreenable: false
+          fullscreenable: false,
+          x: x + width,
+          y
         }
       )
     }

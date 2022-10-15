@@ -4,7 +4,7 @@
       <ul class="met-log-list list-unstyled pl-md-5 ml-md-5">
         <h2 class="d-inline-block my-2 pl-3 pl-md-0">2022</h2>
         <li class="position-relative pl-3 pl-md-4 py-3 py-md-4">
-          <h3 class="h6 position-absolute text-muted">2022.10.14</h3>
+          <h3 class="h6 position-absolute text-muted">2022.10.15</h3>
           <span
             class="rounded-circle p-1 position-absolute bg-white text-center font-weight-bold"
             >·</span

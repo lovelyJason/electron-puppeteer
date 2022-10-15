@@ -1,6 +1,6 @@
 <template>
   <div id="app">
-    <el-button type="primary" @click="onRefreshClick">刷新</el-button>
+    <el-button :loading="tableLoading" type="primary" @click="onRefreshClick">刷新</el-button>
     <el-table v-loading="tableLoading" :data="tableData" border style="width: 100%;margin-top: 12px;margin-bottom: 12px;">
       <el-table-column prop="patentName" label="案件名称">
         <template slot-scope="scope">
@@ -41,6 +41,14 @@ export default {
       ipcRenderer.send('getHistory')
     }
   },
+  // beforeCreate () {
+  //   const cur = remote.getCurrentWindow()
+  //   const parent = cur.getParentWindow()
+  //   const parentPosition = parent.getPosition()
+  //   console.log(parentPosition)
+  //   const [x, y] = parentPosition
+  //   cur.setPosition(x, y, false)
+  // },
   mounted () {
     const title = document.title
     document.title = title + dayjs().format('YYYY-MM-DD')

@@ -61,7 +61,7 @@ export default {
     },
     async getData () {
       try {
-        const codeList = remote.getGlobal('machineIdList')
+        const codeList = remote.getGlobal('machineIdList') || []
         this.hasAuth = codeList.some(val => {
           return val.id === this.machineId
         })
@@ -79,7 +79,7 @@ export default {
   mounted () {
     setTimeout(() => {
       this.getData()
-    }, 0)
+    }, 100)
     ipcRenderer.on('checkAuth', (event, ans) => {
       this.hasAuth = ans
     })
