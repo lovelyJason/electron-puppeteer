@@ -7,8 +7,8 @@
           <a href="javascript:void(0)" style="color: #42b983" @click="jump"
             >选择浏览器路径</a
           >
-          <a href="javascript:void(0)" style="color: #42b983;margin-left: 6px;" @click="openSubWindow"
-            >测试</a>
+          <!-- <a href="javascript:void(0)" style="color: #42b983;margin-left: 6px;" @click="openSubWindow"
+            >测试</a> -->
         </div>
         <div style="display: flex;">
           <div class="left">
@@ -181,7 +181,8 @@
       </el-tab-pane>
       <el-tab-pane label="增加单据" name="second">
         <el-button type="primary" @click="caseFormType = 'add';caseFormVisible = true">新增单据</el-button>
-        <el-button type="primary" @click="openConfig">导入/编辑单据</el-button>
+        <el-button type="primary" @click="openConfig">打开配置文件</el-button>
+        <el-button type="primary" @click="exportCaseList">导出</el-button>
         <el-table :data="tableData" border style="width: 100%;margin-top: 12px;margin-bottom: 12px;">
           <el-table-column prop="patentName" label="案件名称" width="110">
             <template slot-scope="scope">
@@ -195,7 +196,7 @@
           </el-table-column>
           <el-table-column prop="appointPhone" label="联系方式" width="110"> </el-table-column>
           <el-table-column prop="typeText" label="专利类型" width="60"> </el-table-column>
-          <el-table-column prop="applyClassifyCode" label="分类号" width="58"> </el-table-column>
+          <el-table-column prop="applyClassifyCode" label="分类号" width="66"> </el-table-column>
           <el-table-column prop="orderSubmitTime" label="预约时间" width="100"> </el-table-column>
           <el-table-column label="操作" width="180" fixed="right">
             <template slot-scope="scope">
@@ -271,7 +272,19 @@
           </el-select>
         </el-form-item>
         <el-form-item class="text-left flex" label="分类号" prop="applyClassifyCode">
-          <el-input v-model="caseForm.applyClassifyCode"></el-input>
+          <!-- <el-input v-model="caseForm.applyClassifyCode"></el-input> -->
+          <el-select filterable v-model="caseForm.applyClassifyCode" placeholder="此处只有发明的分类号，打开网页动态拉取" ref="applyClassify">
+            <el-option
+              v-for="applyClassify in applyClassifyList"
+              :key="applyClassify.value"
+              :label="applyClassify.value"
+              :value="applyClassify.value"
+            >
+              <el-popover trigger="hover" effect="light" :content="applyClassify.label" placement="top">
+                <div slot="reference">{{ applyClassify.value }}</div>
+              </el-popover>
+            </el-option>
+          </el-select>
         </el-form-item>
         <el-form-item class="text-left flex" label="预约时间" prop="orderSubmitTime">
           <!-- <el-input v-model="caseForm.orderSubmitTime" placeholder="格式如：2022-08-29"></el-input> -->
@@ -378,6 +391,7 @@ export default {
       inWhitelist: false,
       companyList: [],
       typeList: [],
+      applyClassifyList: [],
       pickerOptions: {
         disabledDate (time) {
           if (isToday(time.getTime())) return false
@@ -392,7 +406,8 @@ export default {
       return process.env.NODE_ENV === 'development'
     },
     logPath () {
-      return path.resolve(remote.getGlobal('STORE_PATH'), './logs/main.log')
+      console.log(remote.getGlobal('LOG_PATH'))
+      return path.join(remote.getGlobal('LOG_PATH'), 'main.log')
     }
   },
   methods: {
@@ -432,7 +447,7 @@ export default {
         inputPlaceholder: '格式为front_bpm.session.id=xxx; JSESSIONID=xxx\n如何设置，参考http://cdn.qdovo.com/doudou.gif',
         customClass: 'cookies-prompt'
       }).then(({ value }) => {
-        ipcRenderer.invoke('setData', [{
+        ipcRenderer.invoke('setStoreData', [{
           key: 'cookies',
           value: value
         }])
@@ -460,6 +475,15 @@ export default {
       })
       ipcRenderer.invoke('open-config')
     },
+    async exportCaseList () {
+      const data = await ipcRenderer.invoke('getStoreData', ['caseList'])
+      const [caseList] = data
+      clipboard.writeText(JSON.stringify(caseList))
+      this.$message({
+        type: 'success',
+        message: '已复制到剪切板'
+      })
+    },
     setCase () {
       this.$refs.ruleForm.validate((valid) => {
         if (valid) {
@@ -477,8 +501,7 @@ export default {
             typeCode,
             typeText: this.$refs.type.selectedLabel,
             applyClassifyCode,
-            orderSubmitTime,
-            executionFrequency: Number.parseInt(this.executionFrequency)
+            orderSubmitTime
           }
           if (this.caseFormType === 'add') {
             this.tableData.push({ ...formData })
@@ -486,10 +509,11 @@ export default {
             this.$set(this.tableData, this.editCaseFormIdex, formData)
           }
           this.caseFormVisible = false
-          ipcRenderer.invoke('setData', [{
+          ipcRenderer.invoke('setStoreData', [{
             key: 'caseList',
             value: this.tableData
           }])
+          this.getStoreData()
         }
       })
     },
@@ -499,7 +523,7 @@ export default {
     },
     onApplyCompanyChange () {
       this.$nextTick(() => {
-        console.log(this.$refs.applyCompany.selectedLabel)
+        // console.log(this.$refs.applyCompany.selectedLabel)
       })
     },
     querySearch (queryString, cb) {
@@ -721,10 +745,24 @@ export default {
       this.getStoreData()
       this.getGlobalData()
     }, 1000)
-    ipcRenderer.on('setForm', (event, ans) => {
+    const applyClassifyList = localStorage.getItem('applyClassifyList')
+    const companyList = localStorage.getItem('companyList')
+    const typeList = localStorage.getItem('typeList')
+    if (applyClassifyList) {
+      this.applyClassifyList = JSON.parse(applyClassifyList)
+    }
+    if (companyList) {
+      this.companyList = JSON.parse(companyList)
+    }
+    if (typeList) {
+      this.typeList = JSON.parse(typeList)
+    }
+    ipcRenderer.on('setSelectList', (event, ans) => {
+      console.log(ans)
       if (typeof ans === 'object' && ans != null) {
         for (const key in ans) {
           this[key] = ans[key]
+          localStorage.setItem(key, JSON.stringify(ans[key]))
         }
         if (!this.caseForm.typeCode) {
           this.caseForm.typeCode = this.typeList.length ? this.typeList[0].value : ''

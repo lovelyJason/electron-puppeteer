@@ -139,7 +139,7 @@ export class Window {
       createProtocol('app')
       // Load the index.html when not in development
       // win.loadURL('app://./index.html')
-      winURL = args.route ? `app://./index.html${args.route}` : 'app://./index.html'
+      winURL = args.route ? `app://./${args.route}.html` : 'app://./index.html'
     }
     win.loadURL(winURL)
     console.log('window loaded')

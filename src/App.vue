@@ -79,8 +79,9 @@ export default {
   mounted () {
     setTimeout(() => {
       this.getData()
-    }, 100)
+    }, 200)
     ipcRenderer.on('checkAuth', (event, ans) => {
+      console.log(111, ans)
       this.hasAuth = ans
     })
   }

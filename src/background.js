@@ -14,6 +14,7 @@ import axios from 'axios'
 // require('@electron/remote/main').initialize()      // electron 10.0以下版本不兼容
 import { Window } from './windows.js'
 
+const { name } = require('../package.json')
 const { exec } = require('child_process');
 // const https = require('https');
 const { machineIdSync } = require('node-machine-id');
@@ -21,6 +22,9 @@ const fs = require('fs')
 const puppeteer = require("puppeteer");
 const os = require("os");
 const Store = require('electron-store');
+// on Linux: ~/.config/{app name}/logs/{process type}.log
+// on macOS: ~/Library/Logs/{app name}/{process type}.log
+// on Windows: %USERPROFILE%\AppData\Roaming\{app name}\logs\{process type}.log
 const log = require('electron-log')
 const path = require('path')
 const { intercept, patterns } = require('puppeteer-interceptor');
@@ -97,6 +101,8 @@ global.balanceNum = 0
 
 const STORE_PATH = app.getPath('userData')
 console.log('用户目录', STORE_PATH)
+global.LOG_PATH = process.platform !== 'darwin' ? path.resolve(STORE_PATH, './logs') : `~/Library/Logs/${name}`
+// console.log(global.LOG_PATH)
 global.STORE_PATH = STORE_PATH
 global.CONFIG_PATH = path.resolve(STORE_PATH, './config.json')
 global.machineId = machineIdSync()    // e40c2e6224c173ffb4a8b332c49d4527cbd91e3b1d0f56c22b71dd1627d4f31d
@@ -148,7 +154,7 @@ async function getHistory () {
       'Sec-Fetch-Site': 'same-origin',
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36',
       'X-Requested-With': 'XMLHttpRequest',
-      'sec-ch-ua': '"Chromium";v="106", "Google Chrome";v="106", "Not;A=Brand";v="99"',
+      'sec-ch-ua': '"Chromium";v="104", " Not A;Brand";v="99", "Google Chrome";v="104"',
       'sec-ch-ua-mobile': '?0',
       'sec-ch-ua-platform': '"Windows"'
     }
@@ -179,6 +185,7 @@ async function checkMachineAuth() {
     has_auth = false
     throw error
   }
+  win.webContents.send('checkAuth', has_auth)
 }
 let checkAuthJob = schedule.scheduleJob('00 58 10 * * *', async function () {
   await checkMachineAuth()
@@ -246,7 +253,7 @@ function requestVcode() {
         'Sec-Fetch-Mode': 'no-cors',
         'Sec-Fetch-Site': 'same-origin',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36',
-        'sec-ch-ua': '"Chromium";v="106", "Google Chrome";v="106", "Not;A=Brand";v="99"',
+        'sec-ch-ua': '"Chromium";v="104", " Not A;Brand";v="99", "Google Chrome";v="104"',
         'sec-ch-ua-mobile': '?0',
         'sec-ch-ua-platform': '"Windows"'
       },
@@ -399,14 +406,14 @@ function submitForm(timerId, order, close) {
 
     let code
 
-    // let base64Data = await requestVcode()
-    // let codeRes = await getRecognition(base64Data) // {"msg":"识别成功","code":10000,"data":{"code":0,"data":"9033","time":0.010438203811645508,"unique_code":"ammu43nCeFgF4KuHE+TYYcKYpnqhp0BddZxqxBszors"}}
-    // code = codeRes.data && codeRes.data.data
-    // console.log('打码结果', code)
-    // if(!code) {
-    //   win.webContents.send('log', '图片验证码识别失败')
-    //   return resolve(0)
-    // }
+    let base64Data = await requestVcode()
+    let codeRes = await getRecognition(base64Data) // {"msg":"识别成功","code":10000,"data":{"code":0,"data":"9033","time":0.010438203811645508,"unique_code":"ammu43nCeFgF4KuHE+TYYcKYpnqhp0BddZxqxBszors"}}
+    code = codeRes.data && codeRes.data.data
+    console.log('打码结果', code)
+    if(!code) {
+      win.webContents.send('log', '图片验证码识别失败')
+      return resolve(0)
+    }
 
     let body = Object.assign(data, { code })
     let config = {
@@ -429,13 +436,13 @@ function submitForm(timerId, order, close) {
         requestCancelFns.push(c)
       })
     }
-    config = {
-      method: 'get',
-      url: 'http://127.0.0.1:3000/api/test',
-      cancelToken: new CancelToken(function executor(c) {
-        requestCancelFns.push(c)
-      })
-    }
+    // config = {
+    //   method: 'get',
+    //   url: 'http://127.0.0.1:3000/api/test',
+    //   cancelToken: new CancelToken(function executor(c) {
+    //     requestCancelFns.push(c)
+    //   })
+    // }
     formDataList.push(formDataList.shift())
 
     console.log('当前请求参数', body)
@@ -540,6 +547,7 @@ function getChromiumExecPath(event) {
         if (osType === "windows") {
           resolve(defaultPath || puppeteer.executablePath().replace('app.asar', 'app.asar.unpacked'));
         } else {
+          resolve('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')
         }
       }
     } catch (error) {
@@ -928,17 +936,58 @@ function setOrderTime() {
     }
   })
 }
+function getApplyClassifyHtml(cookies) {
+  var config = {
+    method: 'get',
+    url: 'https://zlys.jsipp.cn/auth/patent/common/classificationCaseData?appId=yushen&typeCode=1&applyFieldCode=&code=',
+    headers: {
+      'Accept': '*/*',
+      'Accept-Language': 'zh-CN,zh;q=0.9',
+      'Connection': 'keep-alive',
+      'Cookie': cookies,
+      'Referer': 'https://zlys.jsipp.cn/auth/patent/classifyPage?typeCode=1',
+      'Sec-Fetch-Dest': 'empty',
+      'Sec-Fetch-Mode': 'cors',
+      'Sec-Fetch-Site': 'same-origin',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.5112.102 Safari/537.36',
+      'X-Requested-With': 'XMLHttpRequest',
+      'sec-ch-ua': '"Chromium";v="104", " Not A;Brand";v="99", "Google Chrome";v="104"',
+      'sec-ch-ua-mobile': '?0',
+      'sec-ch-ua-platform': '"Windows"'
+    }
+  };
 
-async function fetchDataFromPage() {
+  return axios(config)
+  .then(function (response) {
+    return response.data
+  })
+  .catch(function (error) {
+    return error
+  });
+
+
+}
+async function fetchDataFromPage(cookies) {
   let lastPage = global.lastPage
   let formHtml = await lastPage.$eval('.layui-form', el => el.innerHTML)
+  // console.log(111, await page.$('select[name="applyCompanyId"]'))  // 企业账号此字段为null
+  let applyCompanySelect = await page.$('select[name="applyCompanyId"]')
   const $ = cheerio.load(formHtml, { ignoreWhitespace: true, });
-  let companyList = $('.layui-form-item:nth-child(2) select[name="applyCompanyId"] option').map(function() {
-    return {
-      label: $(this).text().trim(),
-      value: $(this).attr('value')
-    }
-  }).toArray().filter(val => val.value)
+  let companyList = []
+  if(applyCompanySelect) {
+    companyList = $('.layui-form-item:nth-child(2) select[name="applyCompanyId"] option').map(function() {
+      return {
+        label: $(this).text().trim(),
+        value: $(this).attr('value')
+      }
+    }).toArray().filter(val => val.value)
+  } else {
+    companyList.push({
+      label: $('input[name="applyCompanyName"]').attr('value'),
+      value: $('input[name="applyCompanyId"]').attr('value')
+    })
+  }
+  // console.log(companyList)
   let typeList = $('select[name="typeCode"] option').map(function() {
     return {
       label: $(this).text().trim(),
@@ -946,17 +995,227 @@ async function fetchDataFromPage() {
     }
   }).toArray().filter(val => val.value)
 
-  win.webContents.send('setForm', {
+  win.webContents.send('setSelectList', {
     companyList,
     typeList
   })
+}
+async function fetchApplyClassify(cookies) {
+  let applyClassifyList = []
+  let applyClassifyHtml = await getApplyClassifyHtml(cookies)
+  if(applyClassifyHtml) {
+    const $1 = cheerio.load(applyClassifyHtml, { ignoreWhitespace: true })
+    applyClassifyList = $1('input[type="radio"]').map(function() {
+      return {
+        label: $1(this).attr('vname'),
+        value: $1(this).attr('value')
+      }
+    }).toArray()
+  }
+  console.log('applyClassifyList', applyClassifyList)
+  win.webContents.send('setSelectList', {
+    applyClassifyList
+  })
+}
+/*
+S = "{"project":"ZLYSXT","moduleId":"quick"}"
+S = o.LZString.compressToBase64(S)
+*/
+const t = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
+let o = {
+  LZString: {
+    compressToBase64: function(r) {
+      if (null == r)
+          return "";
+      var n = o.LZString._compress(r, 6, function(r) {
+          return t.charAt(r)
+      });
+      switch (n.length % 4) {
+      default:
+      case 0:
+          return n;
+      case 1:
+          return n + "===";
+      case 2:
+          return n + "==";
+      case 3:
+          return n + "="
+      }
+    },
+    _compress: function(r, o, n) {
+      if (null == r)
+          return "";
+      var t, e, i, s = {}, p = {}, c = "", u = "", a = "", l = 2, f = 3, h = 2, d = [], m = 0, g = 0;
+      for (i = 0; i < r.length; i += 1)
+          if (c = r.charAt(i),
+          Object.prototype.hasOwnProperty.call(s, c) || (s[c] = f++,
+          p[c] = !0),
+          u = a + c,
+          Object.prototype.hasOwnProperty.call(s, u))
+              a = u;
+          else {
+              if (Object.prototype.hasOwnProperty.call(p, a)) {
+                  if (a.charCodeAt(0) < 256) {
+                      for (t = 0; t < h; t++)
+                          m <<= 1,
+                          g == o - 1 ? (g = 0,
+                          d.push(n(m)),
+                          m = 0) : g++;
+                      for (e = a.charCodeAt(0),
+                      t = 0; t < 8; t++)
+                          m = m << 1 | 1 & e,
+                          g == o - 1 ? (g = 0,
+                          d.push(n(m)),
+                          m = 0) : g++,
+                          e >>= 1
+                  } else {
+                      for (e = 1,
+                      t = 0; t < h; t++)
+                          m = m << 1 | e,
+                          g == o - 1 ? (g = 0,
+                          d.push(n(m)),
+                          m = 0) : g++,
+                          e = 0;
+                      for (e = a.charCodeAt(0),
+                      t = 0; t < 16; t++)
+                          m = m << 1 | 1 & e,
+                          g == o - 1 ? (g = 0,
+                          d.push(n(m)),
+                          m = 0) : g++,
+                          e >>= 1
+                  }
+                  0 == --l && (l = Math.pow(2, h),
+                  h++),
+                  delete p[a]
+              } else
+                  for (e = s[a],
+                  t = 0; t < h; t++)
+                      m = m << 1 | 1 & e,
+                      g == o - 1 ? (g = 0,
+                      d.push(n(m)),
+                      m = 0) : g++,
+                      e >>= 1;
+              0 == --l && (l = Math.pow(2, h),
+              h++),
+              s[u] = f++,
+              a = String(c)
+          }
+      if ("" !== a) {
+          if (Object.prototype.hasOwnProperty.call(p, a)) {
+              if (a.charCodeAt(0) < 256) {
+                  for (t = 0; t < h; t++)
+                      m <<= 1,
+                      g == o - 1 ? (g = 0,
+                      d.push(n(m)),
+                      m = 0) : g++;
+                  for (e = a.charCodeAt(0),
+                  t = 0; t < 8; t++)
+                      m = m << 1 | 1 & e,
+                      g == o - 1 ? (g = 0,
+                      d.push(n(m)),
+                      m = 0) : g++,
+                      e >>= 1
+              } else {
+                  for (e = 1,
+                  t = 0; t < h; t++)
+                      m = m << 1 | e,
+                      g == o - 1 ? (g = 0,
+                      d.push(n(m)),
+                      m = 0) : g++,
+                      e = 0;
+                  for (e = a.charCodeAt(0),
+                  t = 0; t < 16; t++)
+                      m = m << 1 | 1 & e,
+                      g == o - 1 ? (g = 0,
+                      d.push(n(m)),
+                      m = 0) : g++,
+                      e >>= 1
+              }
+              0 == --l && (l = Math.pow(2, h),
+              h++),
+              delete p[a]
+          } else
+              for (e = s[a],
+              t = 0; t < h; t++)
+                  m = m << 1 | 1 & e,
+                  g == o - 1 ? (g = 0,
+                  d.push(n(m)),
+                  m = 0) : g++,
+                  e >>= 1;
+          0 == --l && (l = Math.pow(2, h),
+          h++)
+      }
+      for (e = 2,
+      t = 0; t < h; t++)
+          m = m << 1 | 1 & e,
+          g == o - 1 ? (g = 0,
+          d.push(n(m)),
+          m = 0) : g++,
+          e >>= 1;
+      for (; ; ) {
+          if (m <<= 1,
+          g == o - 1) {
+              d.push(n(m));
+              break
+          }
+          g++
+      }
+      return d.join("")
+    }
+  }
+}
+
+
+function getSSOLoignUrl(cookies) {
+  // var data = 'N4IgDgTg9gVgpgYwC4gFwgFoBkCaBlADQBUQAaEAWygBMBXAGzgElq0QBHWgSwQGsQAvkA==';
+  var data = o.LZString.compressToBase64('{"project":"ZLYSXT","moduleId":"quick"}')
+  console.log('加密数据', data)
+  var config = {
+    method: 'post',
+    url: 'https://ip.jsipp.cn/ZSCQ/app/zscq.app/action/ssoServer.action?method=getSSOLoginUrl',
+    headers: {
+      'Accept': '*/*',
+      'Accept-Language': 'zh-CN,zh;q=0.9',
+      'Connection': 'keep-alive',
+      'Content-type': 'application/json',
+      'Cookie': cookies,
+      'Referer': 'https://ip.jsipp.cn/ZSCQ/app/zscq.app/pages/patent.html',
+      'Sec-Fetch-Dest': 'empty',
+      'Sec-Fetch-Mode': 'cors',
+      'Sec-Fetch-Site': 'same-origin',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.5112.102 Safari/537.36',
+      'X-Encrypt-Request': 'true',
+      'X-Requested-With': 'XMLHttpRequest',
+      'sec-ch-ua': '"Chromium";v="104", " Not A;Brand";v="99", "Google Chrome";v="104"',
+      'sec-ch-ua-mobile': '?0',
+      'sec-ch-ua-platform': '"Windows"'
+    },
+    data: data
+  };
+
+  return axios(config)
+  .then(function (response) {
+    return response.data
+  })
+  .catch(function (error) {
+    return error
+  });
+
 }
 
 async function postTask(event, ans) {
   try {
     // 获取一个加密参数，目前看来是hardcode的
     //let res = await api.post('https://ip.jsipp.cn/ZSCQ/app/zscq.app/action/ssoServer.action?method=getSSOLoginUrl')
-    let url1 = 'https://zlys.jsipp.cn/toPage/auth/getYS' + '?login_key=' + 'F5B3D8963940E757DCF57F636DD3039CF8979B8DE5EC056B0DD4B4DC87DCF9E1'
+    let temp1 = await browser.newPage()
+    await temp1.goto('https://ip.jsipp.cn/ZSCQ/app/zscq.app/pages/patent.html')
+    let cookies1 = await temp1.cookies()
+    cookies1 = formatCookies(cookies1)
+    let res1 = await getSSOLoignUrl(cookies1)
+    let login_key = res1.params && res1.params.login_key
+    console.log('login_key', login_key)
+
+    let url1 = 'https://zlys.jsipp.cn/toPage/auth/getYS' + '?login_key=' + login_key
     let url2 = 'https://zlys.jsipp.cn/auth/patent/general/toAppointmentPage?appId=yushen'
     let page1 = await browser.newPage()
     await page1.goto(url1)
@@ -980,7 +1239,8 @@ async function postTask(event, ans) {
     // win.webContents.send('log', 'cookies抓取成功：' + JSON.stringify(cookies))
     await lastPage.waitForSelector('#onSubmit', { timeout: 3000 })
 
-    fetchDataFromPage()
+    fetchDataFromPage(submit_cookie)
+    fetchApplyClassify(submit_cookie)
     let checkRes = await interval(validateForm, 10000, 100000)
     if(checkRes === 1) {
       // 要先点击按钮触发一次，否则此promise 出于pendding
@@ -1107,9 +1367,14 @@ async function createWindow() {
     }
   }))
   ipcMain.handle('openLog', (event) => {
+    let cmd = ''
     if(process.platform !== 'darwin') {
-      exec('start ' + path.resolve(global.STORE_PATH, './logs/main.log'))
+      cmd = 'start ' + path.resolve(global.STORE_PATH, './logs/main.log')
+    } else {
+      console.log(1111)
+      cmd = 'open ' + path.join(global.LOG_PATH, 'main.log')
     }
+    exec(cmd)
     return true
   })
   ipcMain.handle('closeBrowser', (event, ans) => {
@@ -1125,7 +1390,7 @@ async function createWindow() {
     })
     return list
   })
-  ipcMain.handle('setData', (event, ans) => {
+  ipcMain.handle('setStoreData', (event, ans) => {
     ans.forEach(val => {
       const { key, value } = val
       store.set(key, value)
