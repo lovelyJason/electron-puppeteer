@@ -971,8 +971,8 @@ async function fetchDataFromPage(cookies) {
   let lastPage = global.lastPage
   let formHtml = await lastPage.$eval('.layui-form', el => el.innerHTML)
   // console.log(111, await page.$('select[name="applyCompanyId"]'))  // 企业账号此字段为null
-  let applyCompanySelect = await page.$('select[name="applyCompanyId"]')
   const $ = cheerio.load(formHtml, { ignoreWhitespace: true, });
+  let applyCompanySelect = $('select[name="applyCompanyId"]')
   let companyList = []
   if(applyCompanySelect) {
     companyList = $('.layui-form-item:nth-child(2) select[name="applyCompanyId"] option').map(function() {
@@ -980,7 +980,7 @@ async function fetchDataFromPage(cookies) {
         label: $(this).text().trim(),
         value: $(this).attr('value')
       }
-    }).toArray().filter(val => val.value)
+    }).toArray()
   } else {
     companyList.push({
       label: $('input[name="applyCompanyName"]').attr('value'),
