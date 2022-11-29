@@ -375,7 +375,7 @@ export default {
       },
       rules: {
         patentName: [{ required: true, message: '请输入专利名称', trigger: 'blur' }],
-        applyCompanyId: [{ required: true, message: '请选择申请主体', trigger: 'change' }],
+        // applyCompanyId: [{ required: true, message: '请选择申请主体', trigger: 'change' }],
         appointPhone: [{ required: true, message: '请输入联系方式', trigger: 'blur' }],
         typeCode: [{ required: true, message: '请选择专利类型', trigger: 'change' }],
         applyClassifyCode: [{ required: true, message: '请输入分类号', trigger: 'blur' }],
@@ -487,33 +487,41 @@ export default {
     setCase () {
       this.$refs.ruleForm.validate((valid) => {
         if (valid) {
-          const { patentName, applyCompanyId, appointPhone, typeCode, applyClassifyCode, orderSubmitTime } = this.caseForm
-          console.log(patentName)
-          const formData = {
-            patentName,
-            appId: 'yushen',
-            applyFieldId: '3887f4dbf7fe4097903ce8055ba24496', // 以下三个一体 hardcode
-            applyFieldCode: '2', // hardcode
-            applyFieldName: '新型功能和结构材料', // hardcode
-            applyCompanyId,
-            applyCompanyName: this.$refs.applyCompany.selectedLabel,
-            appointPhone,
-            typeCode,
-            typeText: this.$refs.type.selectedLabel,
-            applyClassifyCode,
-            orderSubmitTime
+          try {
+            const { patentName, applyCompanyId, appointPhone, typeCode, applyClassifyCode, orderSubmitTime } = this.caseForm
+            console.log(patentName)
+            const formData = {
+              patentName,
+              appId: 'yushen',
+              applyFieldId: '3887f4dbf7fe4097903ce8055ba24496', // 以下三个一体 hardcode
+              applyFieldCode: '2', // hardcode
+              applyFieldName: '新型功能和结构材料', // hardcode
+              applyCompanyId,
+              applyCompanyName: this.$refs.applyCompany.selectedLabel,
+              appointPhone,
+              typeCode,
+              typeText: this.$refs.type.selectedLabel,
+              applyClassifyCode,
+              orderSubmitTime
+            }
+            if (this.caseFormType === 'add') {
+              if (!this.tableData) this.tableData = []
+              this.tableData.push({ ...formData })
+            } else {
+              this.$set(this.tableData, this.editCaseFormIdex, formData)
+            }
+            this.caseFormVisible = false
+            ipcRenderer.invoke('setStoreData', [{
+              key: 'caseList',
+              value: this.tableData
+            }])
+            this.getStoreData()
+          } catch (error) {
+            this.$message({
+              type: 'error',
+              message: error.message
+            })
           }
-          if (this.caseFormType === 'add') {
-            this.tableData.push({ ...formData })
-          } else {
-            this.$set(this.tableData, this.editCaseFormIdex, formData)
-          }
-          this.caseFormVisible = false
-          ipcRenderer.invoke('setStoreData', [{
-            key: 'caseList',
-            value: this.tableData
-          }])
-          this.getStoreData()
         }
       })
     },

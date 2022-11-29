@@ -975,7 +975,7 @@ async function fetchDataFromPage(cookies) {
   let applyCompanySelect = $('select[name="applyCompanyId"]')
   let companyList = []
   if(applyCompanySelect) {
-    companyList = $('.layui-form-item:nth-child(2) select[name="applyCompanyId"] option').map(function() {
+    companyList = $('select[name="applyCompanyId"] option').map(function() {
       return {
         label: $(this).text().trim(),
         value: $(this).attr('value')
