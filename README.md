@@ -6,7 +6,8 @@
 
 Vue2 + Electron + Puppeteer + element-ui + umy-ui
 
-使用simulatedgreg/electron-vue初始化项目
+使用vue-cli-plugin-electron-builder插件将Vue项目扩展为electron项目
+也可以使用simulatedgreg/electron-vue初始化项目，只是这个包有点年头没更新了...
 
 
 ![微信图片编辑_20230517225955](https://github.com/lovelyJason/electron-puppeteer/assets/50656459/c92d16e2-e92f-421b-82c1-d66a2eca9a62)
