@@ -971,22 +971,24 @@ async function fetchDataFromPage(cookies) {
   let lastPage = global.lastPage
   let formHtml = await lastPage.$eval('.layui-form', el => el.innerHTML)
   // console.log(111, await page.$('select[name="applyCompanyId"]'))  // 企业账号此字段为null
-  let applyCompanySelect = await page.$('select[name="applyCompanyId"]')
   const $ = cheerio.load(formHtml, { ignoreWhitespace: true, });
+  let applyCompanySelect = $('select[name="applyCompanyId"]')
   let companyList = []
+  console.log(applyCompanySelect, '------')
   if(applyCompanySelect) {
-    companyList = $('.layui-form-item:nth-child(2) select[name="applyCompanyId"] option').map(function() {
+    companyList = $('select[name="applyCompanyId"] option').map(function() {
       return {
         label: $(this).text().trim(),
         value: $(this).attr('value')
       }
-    }).toArray().filter(val => val.value)
+    }).toArray()
   } else {
     companyList.push({
       label: $('input[name="applyCompanyName"]').attr('value'),
       value: $('input[name="applyCompanyId"]').attr('value')
     })
   }
+  console.log(companyList, 'companyList')
   // console.log(companyList)
   let typeList = $('select[name="typeCode"] option').map(function() {
     return {
@@ -1012,7 +1014,7 @@ async function fetchApplyClassify(cookies) {
       }
     }).toArray()
   }
-  console.log('applyClassifyList', applyClassifyList)
+  // console.log('applyClassifyList', applyClassifyList)
   win.webContents.send('setSelectList', {
     applyClassifyList
   })
